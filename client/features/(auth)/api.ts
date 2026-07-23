@@ -32,3 +32,14 @@ export const resetPassword = (data: {
     body: data,
     fallbackErrorMessage: "Failed to reset password",
   });
+
+export const getCurrentUser = () =>
+  apiFetch<User>("/auth/me", {
+    fallbackErrorMessage: "Failed to fetch current user",
+  });
+
+export const logoutUser = () =>
+  apiFetch<null>("/auth/logout", {
+    method: "POST",
+    fallbackErrorMessage: "Failed to logout",
+  });

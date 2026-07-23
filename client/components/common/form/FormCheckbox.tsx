@@ -1,8 +1,11 @@
-import { useFieldContext } from "./hooks";
+import { useFieldContext } from "./formContext";
 import { FormBase, FormControlProps } from "./FormBase";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export function FormCheckbox(props: FormControlProps) {
+export function FormCheckbox({
+  required,
+  ...props
+}: FormControlProps & { required?: boolean }) {
   const field = useFieldContext<boolean>();
   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
 
@@ -15,6 +18,7 @@ export function FormCheckbox(props: FormControlProps) {
         onBlur={field.handleBlur}
         onCheckedChange={(e) => field.handleChange(e === true)}
         aria-invalid={isInvalid}
+        required={required}
       />
     </FormBase>
   );

@@ -23,20 +23,26 @@ const registerFormSchema = z.object({
     .refine((val) => val.length > 7, {
       message: "Password must be at least 8 characters long",
     }),
+  privacyPolicy: z.boolean().refine((val) => val, {
+    message: "You must agree to the privacy policy",
+  }),
 });
 
 export type RegisterFormTypes = ReturnType<
-  typeof useRegisterPage
+  typeof useSignupPage
 >["state"]["form"];
 
-const useRegisterPage = () => {
+const useSignupPage = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const router = useRouter();
 
   const registerMutation = useMutation({
     mutationFn: (data: RegisterInputs) => registerUser(data),
-    onSuccess: () => router.push("/todos"),
+    onSuccess: (response) => {
+      // queryClient.setQueryData(["me"], response.user);
+      router.push("/onboarding");
+    },
     onError: () => toast.error("Failed to register"),
   });
 
@@ -45,6 +51,7 @@ const useRegisterPage = () => {
       username: "",
       email: "",
       password: "",
+      privacyPolicy: false,
     },
     validators: {
       onSubmit: registerFormSchema,
@@ -64,4 +71,4 @@ const useRegisterPage = () => {
   };
 };
 
-export default useRegisterPage;
+export default useSignupPage;

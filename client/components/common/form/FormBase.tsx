@@ -6,7 +6,7 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
-import { useFieldContext } from "./hooks";
+import { useFieldContext } from "./formContext";
 
 export type FormControlProps = {
   label: string;

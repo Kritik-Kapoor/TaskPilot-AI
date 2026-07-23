@@ -26,8 +26,8 @@ const ForgotPasswordPage = () => {
 
         <p className="text-muted-foreground text-sm text-center">
           Remember your password?
-          <Link href="/login" className="text-blue-500 ml-1">
-            Login
+          <Link href="/sign-in" className="text-blue-500 ml-1">
+            Sign in
           </Link>
         </p>
         {showSuccessMessage && (

@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { Input } from "@/components/ui/input";
 import { FormBase, FormControlProps } from "./FormBase";
-import { useFieldContext } from "./hooks";
+import { useFieldContext } from "./formContext";
 
 type FormInputProps = FormControlProps &
   Pick<ComponentProps<typeof Input>, "type" | "autoComplete" | "className">;

@@ -6,7 +6,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { FormBase, FormControlProps } from "./FormBase";
-import { useFieldContext } from "./hooks";
+import { useFieldContext } from "./formContext";
 
 type FormInputGroupProps = FormControlProps &
   Pick<
@@ -14,6 +14,7 @@ type FormInputGroupProps = FormControlProps &
     "type" | "autoComplete" | "className"
   > & {
     children?: ReactNode;
+    groupClasses?: string;
   };
 
 function FormInputGroupComponent({
@@ -22,6 +23,7 @@ function FormInputGroupComponent({
   autoComplete,
   className,
   children,
+  groupClasses,
   ...props
 }: FormInputGroupProps) {
   const field = useFieldContext<string>();
@@ -29,7 +31,7 @@ function FormInputGroupComponent({
 
   return (
     <FormBase {...props}>
-      <InputGroup>
+      <InputGroup className={groupClasses}>
         <InputGroupInput
           id={field.name}
           name={field.name}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -19,16 +19,20 @@ const loginFormSchema = z.object({
     }),
 });
 
-export type LoginFormTypes = ReturnType<typeof useLoginPage>["state"]["form"];
+export type LoginFormTypes = ReturnType<typeof useSigninPage>["state"]["form"];
 
-const useLoginPage = () => {
+const useSigninPage = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginInputs) => loginUser(data),
-    onSuccess: () => router.push("/todos"),
+    onSuccess: (response) => {
+      // queryClient.setQueryData(["me"], response.user);
+      router.push("/dashboard");
+    },
     onError: () => toast.error("Invalid credentials"),
   });
 
@@ -55,4 +59,4 @@ const useLoginPage = () => {
   };
 };
 
-export default useLoginPage;
+export default useSigninPage;

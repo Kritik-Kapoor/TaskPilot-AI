@@ -1,9 +1,9 @@
-import type { LoginFormTypes } from "@/features/(auth)/hooks/useLoginPage";
 import { FormInputGroup } from "@/components/common/form/FormInputGroup";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import Link from "next/link";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
+import { type LoginFormTypes } from "../hooks/useSigninPage";
 
 type LoginFormProps = {
   form: LoginFormTypes;
@@ -20,7 +20,7 @@ const LoginForm = ({
 }: LoginFormProps) => {
   return (
     <form
-      className="w-full max-w-sm"
+      className="w-full"
       onSubmit={(e) => {
         e.preventDefault();
         form.handleSubmit();
@@ -34,6 +34,7 @@ const LoginForm = ({
               type="email"
               autoComplete="email"
               placeholder="Enter your email"
+              className="h-11"
             />
           )}
         </form.AppField>
@@ -44,6 +45,7 @@ const LoginForm = ({
               type={isPasswordVisible ? "text" : "password"}
               autoComplete="password"
               placeholder="Enter password"
+              groupClasses="h-11"
             >
               <FormInputGroup.Addon align="inline-end">
                 <FormInputGroup.Button
@@ -63,14 +65,11 @@ const LoginForm = ({
             </field.InputGroup>
           )}
         </form.AppField>
-        <Link
-          href="/forgot-password"
-          className="text-xs text-muted-foreground text-right hover:text-blue-500"
-        >
+        <Link href="/forgot-password" className="text-xs text-brand text-right">
           Forgot password?
         </Link>
       </FieldGroup>
-      <Button type="submit" className="w-full mt-5" disabled={loading}>
+      <Button type="submit" className="w-full mt-5 h-11" disabled={loading}>
         {loading ? (
           <div className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" /> Signing in...

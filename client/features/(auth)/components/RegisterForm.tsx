@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import Link from "next/link";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
-import { RegisterFormTypes } from "../hooks/useRegisterPage";
+import type { RegisterFormTypes } from "../hooks/useSignupPage";
 
 type RegisterFormProps = {
   form: RegisterFormTypes;
@@ -20,7 +20,7 @@ const RegisterForm = ({
 }: RegisterFormProps) => {
   return (
     <form
-      className="w-full max-w-sm"
+      className="w-full"
       onSubmit={(e) => {
         e.preventDefault();
         form.handleSubmit();
@@ -34,6 +34,7 @@ const RegisterForm = ({
               type="text"
               autoComplete="username"
               placeholder="Enter your username"
+              className="h-11"
             />
           )}
         </form.AppField>
@@ -44,6 +45,7 @@ const RegisterForm = ({
               type="email"
               autoComplete="email"
               placeholder="Enter your email"
+              className="h-11"
             />
           )}
         </form.AppField>
@@ -53,7 +55,8 @@ const RegisterForm = ({
               label="Password"
               type={isPasswordVisible ? "text" : "password"}
               autoComplete="password"
-              placeholder="Enter password"
+              placeholder="At least 8 characters"
+              groupClasses="h-11"
             >
               <FormInputGroup.Addon align="inline-end">
                 <FormInputGroup.Button
@@ -79,6 +82,14 @@ const RegisterForm = ({
         >
           Forgot password?
         </Link>
+        <form.AppField name="privacyPolicy">
+          {(field) => (
+            <field.Checkbox
+              label="I agree to the privacy policy"
+              required={true}
+            />
+          )}
+        </form.AppField>
       </FieldGroup>
       <Button type="submit" className="w-full mt-5" disabled={loading}>
         {loading ? (
