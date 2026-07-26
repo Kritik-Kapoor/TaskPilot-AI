@@ -1,25 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { slugify } from "@/lib/mock-orgs";
+import { ArrowLeft, Info, Sparkles } from "lucide-react";
+import useCreateProjectPage from "@/features/(onboarding)/hooks/useCreateProjectPage";
+import CreateProjectForm from "@/features/(onboarding)/components/CreateProjectForm";
 
 const CreateProjectPage = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const orgSlug = searchParams.get("org") ?? "";
-  const orgName = searchParams.get("name") ?? "your organization";
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  const canSubmit = name.trim().length >= 2;
+  const {
+    state: { orgName, form, isSubmitting },
+  } = useCreateProjectPage();
 
   return (
     <div>
@@ -36,7 +25,7 @@ const CreateProjectPage = () => {
           <h1 className="text-3xl font-semibold tracking-tight">
             Create your first project
           </h1>
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             Projects live inside{" "}
             <span className="font-mono text-foreground">{orgName}</span>. You
             can create as many as you need later.
@@ -48,62 +37,16 @@ const CreateProjectPage = () => {
         </div>
       </div>
 
-      <form
-        className="mt-8 space-y-8"
-        onSubmit={(e) => {
-          e.preventDefault();
+      <div className="mt-6 flex gap-3 rounded-xl border border-brand/20 bg-brand/5 p-4 text-sm text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+        <p>
+          Your organization becomes discoverable for others to join only after
+          you create at least one project. Until then, it won&apos;t appear in
+          organization search.
+        </p>
+      </div>
 
-          if (!canSubmit) {
-            return;
-          }
-
-          router.push(
-            `/onboarding/done?org=${encodeURIComponent(orgSlug)}&project=${encodeURIComponent(slugify(name))}`,
-          );
-        }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="project-name">Project name</Label>
-          <Input
-            id="project-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Mobile App"
-            className="h-12 text-base"
-            required
-            autoFocus
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="project-desc">
-            Description{" "}
-            <span className="font-normal text-muted-foreground">
-              (optional)
-            </span>
-          </Label>
-          <Textarea
-            id="project-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What is this project about?"
-            className="min-h-24 resize-none"
-          />
-        </div>
-
-        <div className="flex items-center justify-between pt-2">
-          <Button asChild variant="ghost">
-            <Link href="/onboarding/done">Skip for now</Link>
-          </Button>
-          <Button
-            type="submit"
-            disabled={!canSubmit}
-            className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
-          >
-            Create project
-          </Button>
-        </div>
-      </form>
+      <CreateProjectForm form={form} isSubmitting={isSubmitting} />
     </div>
   );
 };

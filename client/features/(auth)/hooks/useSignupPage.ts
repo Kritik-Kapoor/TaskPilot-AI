@@ -1,12 +1,11 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { registerUser } from "@/features/(auth)/api";
-import type { RegisterInputs } from "@/features/(auth)/types";
 import { useAppForm } from "@/components/common/form/hooks";
 
 const registerFormSchema = z.object({
@@ -36,14 +35,17 @@ const useSignupPage = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const registerMutation = useMutation({
-    mutationFn: (data: RegisterInputs) => registerUser(data),
-    onSuccess: (response) => {
-      // queryClient.setQueryData(["me"], response.user);
+    mutationFn: registerUser,
+    onSuccess: (user) => {
+      queryClient.setQueryData(["me"], user);
       router.push("/onboarding");
     },
-    onError: () => toast.error("Failed to register"),
+    onError: (error) => {
+      toast.error(error.message || "Failed to register");
+    },
   });
 
   const form = useAppForm({
@@ -57,11 +59,13 @@ const useSignupPage = () => {
       onSubmit: registerFormSchema,
     },
     onSubmit: async ({ value }) => {
-      console.log(value);
-      //   const res = await registerMutation.mutate(value);
-
-      //   if (res.success) form.reset();
-      //   else toast.error(res.error.message);
+      await registerMutation.mutateAsync({
+        username: value.username,
+        email: value.email,
+        password: value.password,
+        isPrivacyPolicyAccepted: value.privacyPolicy,
+      });
+      form.reset();
     },
   });
 

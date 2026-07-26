@@ -1,47 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
+import { Progress } from "@/components/ui/progress";
+import useDonePage from "@/features/(onboarding)/hooks/useDonePage";
 
 const DonePage = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const project = searchParams.get("project");
+  const {
+    state: { progress, statusLabel, projectName, shouldInitialize },
+  } = useDonePage();
 
-  useEffect(() => {
-    if (!project) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      router.push("/dashboard");
-    }, 2500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [project, router]);
+  const subtitle = projectName
+    ? `"${projectName}" is ready. We're getting everything set up for you.`
+    : "Your workspace is ready. We're getting everything set up for you.";
 
   return (
     <div className="py-8 text-center">
       <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-success/15">
         <CheckCircle2 className="h-7 w-7 text-success" />
       </div>
+
       <h1 className="text-3xl font-semibold tracking-tight">
         You&apos;re all set
       </h1>
-      <p className="mt-2 text-muted-foreground">
-        {project
-          ? "Your workspace is ready. Redirecting to dashboard..."
-          : "You can finish project setup anytime from your dashboard."}
-      </p>
-      <Button
-        asChild
-        className="mt-8 bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
-      >
-        <Link href="/dashboard">Go to dashboard</Link>
-      </Button>
+      <p className="mt-2 text-muted-foreground">{subtitle}</p>
+
+      {shouldInitialize ? (
+        <div className="mx-auto mt-8 max-w-md space-y-4 text-left">
+          <Progress value={progress} className="h-2" />
+          <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {statusLabel}
+          </p>
+        </div>
+      ) : (
+        <Button
+          asChild
+          className="mt-8 bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
+        >
+          <Link href="/dashboard">Go to dashboard</Link>
+        </Button>
+      )}
     </div>
   );
 };

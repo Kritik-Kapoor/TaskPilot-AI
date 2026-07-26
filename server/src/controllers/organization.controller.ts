@@ -7,49 +7,110 @@ import {
 import { prisma } from "../config/db.js";
 import { generateAccessToken } from "../utils/generateToken.js";
 import { ensureUserIsProjectAdminOnAllOrgProjects } from "../utils/projectMember.utils.js";
+import type {
+  CheckOrganizationNameQuery,
+  CreateOrganizationInput,
+  OrganizationIdParams,
+  SearchOrganizationsQuery,
+  TransferOwnershipParams,
+  UpdateOrganizationInput,
+} from "../schemas/organization.schema.js";
+import {
+  createOrganizationTransaction,
+  findConflictingOrganization,
+  findOrganizationByName,
+  mapOrganizationSummary,
+  mapJoinRequestSummary,
+  normalizeOrgName,
+  searchDiscoverableOrganizations,
+  getUserJoinRequests,
+} from "../services/organization.service.js";
 
 export const createOrganization = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { name } = req.body as { name: string };
+    const { orgName, description } = req.validated!
+      .body as CreateOrganizationInput;
 
-    if (!name)
-      return new ApiResponse(400, null, "Organization name is required").send(
-        res,
+    const [user, conflictingOrganization] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          organizationId: true,
+          organizationRole: true,
+        },
+      }),
+      findOrganizationByName(orgName),
+    ]);
+
+    if (!user) return new ApiResponse(404, null, "User not found").send(res);
+
+    const userOrgId = user.organizationId;
+
+    const isConflictingWithAnotherOrg =
+      conflictingOrganization && conflictingOrganization.id !== userOrgId;
+
+    // No org yet and no conflict
+    if (!userOrgId && !conflictingOrganization) {
+      const organization = await createOrganizationTransaction(
+        orgName,
+        description ?? null,
+        userId,
       );
 
-    const organization = await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: {
-          orgName: name,
-          ownerId: userId,
-          createdById: userId,
-        },
-        select: {
-          id: true,
-          orgName: true,
-        },
-      });
+      generateAccessToken({ userId, orgId: organization.id }, res);
 
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          organizationId: org.id,
-          organizationRole: "OWNER",
-        },
-      });
+      return new ApiResponse(
+        201,
+        organization,
+        "Organization created successfully",
+      ).send(res);
+    }
 
-      return org;
+    if (!userOrgId && conflictingOrganization) {
+      return new ApiResponse(
+        409,
+        null,
+        "Organization name is already taken",
+      ).send(res);
+    }
+
+    // Already in an org and not an owner
+    if (user.organizationRole !== "OWNER") {
+      return new ApiResponse(
+        403,
+        null,
+        "Only the organization owner can update organization details.",
+      ).send(res);
+    }
+
+    if (isConflictingWithAnotherOrg) {
+      return new ApiResponse(
+        409,
+        null,
+        "Organization name is already taken",
+      ).send(res);
+    }
+
+    const organization = await prisma.organization.update({
+      where: { id: userOrgId! },
+      data: {
+        orgName: normalizeOrgName(orgName),
+        description: description ?? null,
+      },
+      select: {
+        id: true,
+        orgName: true,
+      },
     });
-
-    generateAccessToken({ userId, orgId: organization.id }, res);
 
     return new ApiResponse(
       200,
-      { organization },
-      "Organization created successfully",
+      organization,
+      "Organization updated successfully",
     ).send(res);
   } catch (error) {
+    if (error instanceof ApiError) return error.send(res);
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
@@ -64,6 +125,7 @@ export const getOrganization = async (req: Request, res: Response) => {
       select: {
         id: true,
         orgName: true,
+        description: true,
         createdAt: true,
         updatedAt: true,
         owner: {
@@ -122,13 +184,11 @@ export const getOrganization = async (req: Request, res: Response) => {
 
 export const updateOrganization = async (req: Request, res: Response) => {
   try {
-    const { orgName } = req.body as { orgName: string };
+    const { orgName, description } = req.validated!
+      .body as UpdateOrganizationInput;
     const { orgId, userId } = req.user!;
+
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!orgName)
-      return new ApiResponse(400, null, "Organization name is required").send(
-        res,
-      );
 
     const membership = await prisma.user.findUnique({
       where: { id: userId },
@@ -143,9 +203,27 @@ export const updateOrganization = async (req: Request, res: Response) => {
       ).send(res);
     }
 
+    if (orgName) {
+      const conflictingOrganization = await findConflictingOrganization(
+        orgName,
+        orgId,
+      );
+
+      if (conflictingOrganization) {
+        return new ApiResponse(
+          409,
+          null,
+          "An organization with this name already exists",
+        ).send(res);
+      }
+    }
+
     const organization = await prisma.organization.update({
       where: { id: orgId },
-      data: req.body,
+      data: {
+        ...(orgName !== undefined && { orgName: normalizeOrgName(orgName) }),
+        ...(description !== undefined && { description }),
+      },
     });
 
     return new ApiResponse(
@@ -161,11 +239,9 @@ export const updateOrganization = async (req: Request, res: Response) => {
 export const transferOwnership = async (req: Request, res: Response) => {
   try {
     const { orgId, userId } = req.user!;
-    const { newOwnerId } = req.params as { newOwnerId: string };
+    const { newOwnerId } = req.validated!.params as TransferOwnershipParams;
 
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!newOwnerId)
-      return new ApiResponse(400, null, "New owner ID is required").send(res);
 
     if (newOwnerId === userId)
       return new ApiResponse(400, null, "You are already the owner").send(res);
@@ -242,6 +318,137 @@ export const transferOwnership = async (req: Request, res: Response) => {
     ).send(res);
   } catch (error) {
     return new ApiError(500, "Internal server error").send(res);
+  }
+};
+
+export const searchOrganizations = async (req: Request, res: Response) => {
+  try {
+    const { q } = req.validated!.query as SearchOrganizationsQuery;
+    const query = q?.trim();
+
+    if (!query) {
+      return new ApiResponse(
+        200,
+        [],
+        "Organizations fetched successfully",
+      ).send(res);
+    }
+
+    const organizations = await searchDiscoverableOrganizations(query);
+
+    return new ApiResponse(
+      200,
+      organizations.map(mapOrganizationSummary),
+      "Organizations fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const checkOrganizationName = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.validated!.query as CheckOrganizationNameQuery;
+
+    if (!name)
+      return new ApiResponse(200, null, "Organization name is available").send(
+        res,
+      );
+
+    const organization = await findOrganizationByName(name);
+
+    if (organization && req.user?.orgId === organization.id)
+      return new ApiResponse(200, null, "Organization name is available").send(
+        res,
+      );
+
+    return new ApiResponse(
+      200,
+      organization ? mapOrganizationSummary(organization) : null,
+      organization
+        ? "Organization name is already taken"
+        : "Organization name is available",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getMyJoinRequests = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const joinRequests = await getUserJoinRequests(userId);
+
+    return new ApiResponse(
+      200,
+      joinRequests.map(mapJoinRequestSummary),
+      "Join requests fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const joinRequest = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { orgId: organizationId } = req.validated!
+      .params as OrganizationIdParams;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+
+    if (user?.organizationId)
+      return new ApiResponse(
+        400,
+        null,
+        "You are already part of an organization",
+      ).send(res);
+
+    const organization = await prisma.organization.findFirst({
+      where: { id: organizationId },
+      select: {
+        id: true,
+        orgName: true,
+      },
+    });
+
+    if (!organization)
+      return new ApiResponse(404, null, "Organization not found").send(res);
+
+    const pendingRequest = await prisma.organizationJoinRequest.findFirst({
+      where: {
+        userId,
+        organizationId,
+        status: "PENDING",
+      },
+      select: { id: true },
+    });
+
+    if (pendingRequest) {
+      return new ApiResponse(
+        409,
+        null,
+        "You already have a pending join request for this organization",
+      ).send(res);
+    }
+
+    await prisma.organizationJoinRequest.create({
+      data: {
+        userId,
+        organizationId,
+      },
+    });
+
+    return new ApiResponse(
+      200,
+      organization,
+      "Join request sent successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 

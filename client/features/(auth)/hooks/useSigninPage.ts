@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useAppForm } from "@/components/common/form/hooks";
 import { loginUser } from "@/features/(auth)/api";
-import type { LoginInputs } from "@/features/(auth)/types";
+import { getPostAuthPath } from "@/lib/utils/postAuthPath";
 
 const loginFormSchema = z.object({
   email: z.email({ message: "Invalid email address" }),
@@ -28,12 +28,14 @@ const useSigninPage = () => {
   const queryClient = useQueryClient();
 
   const loginMutation = useMutation({
-    mutationFn: (data: LoginInputs) => loginUser(data),
-    onSuccess: (response) => {
-      // queryClient.setQueryData(["me"], response.user);
-      router.push("/dashboard");
+    mutationFn: loginUser,
+    onSuccess: (user) => {
+      queryClient.setQueryData(["me"], user);
+      router.push(getPostAuthPath(user));
     },
-    onError: () => toast.error("Invalid credentials"),
+    onError: (error) => {
+      toast.error(error.message || "Invalid credentials");
+    },
   });
 
   const form = useAppForm({
@@ -45,11 +47,11 @@ const useSigninPage = () => {
       onSubmit: loginFormSchema,
     },
     onSubmit: async ({ value }) => {
-      console.log(value);
-      //   const res = await loginMutation.mutate(value);
-
-      //   if (res.success) form.reset();
-      //   else toast.error(res.error.message);
+      await loginMutation.mutateAsync({
+        email: value.email,
+        password: value.password,
+      });
+      form.reset();
     },
   });
 

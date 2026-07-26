@@ -8,13 +8,12 @@ import {
 import bcrypt from "bcryptjs";
 import { generateAccessToken } from "../utils/generateToken.js";
 import { clearAuthCookie } from "../utils/authCookie.js";
+import type { SigninInput, SignupInput } from "../schemas/auth.schema.js";
+import { getUserAuthPayload } from "../services/auth.service.js";
 
 export const signup = async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body;
-
-    if (!username || !email || !password)
-      return new ApiResponse(400, null, "Missing required fields").send(res);
+    const { username, email, password } = req.validated!.body as SignupInput;
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -23,12 +22,6 @@ export const signup = async (req: Request, res: Response) => {
     if (existingUser)
       return new ApiResponse(400, null, "User already exists").send(res);
 
-    if (password.length < 8)
-      return new ApiError(
-        400,
-        "Password must be at least 8 characters long",
-      ).send(res);
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -36,6 +29,7 @@ export const signup = async (req: Request, res: Response) => {
         username,
         email,
         passwordHash: hashedPassword,
+        isPrivacyPolicyAccepted: true,
       },
     });
 
@@ -44,10 +38,8 @@ export const signup = async (req: Request, res: Response) => {
     return new ApiResponse(
       200,
       {
-        user: {
-          username: user.username,
-          email: user.email,
-        },
+        username: user.username,
+        email: user.email,
       },
       "Signup successful",
     ).send(res);
@@ -58,12 +50,7 @@ export const signup = async (req: Request, res: Response) => {
 
 export const signin = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password)
-      return new ApiResponse(400, null, "Email and password are required").send(
-        res,
-      );
+    const { email, password } = req.validated!.body as SigninInput;
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -78,18 +65,13 @@ export const signin = async (req: Request, res: Response) => {
 
     generateAccessToken({ userId: user.id, orgId: user.organizationId }, res);
 
-    return new ApiResponse(
-      200,
-      {
-        user: {
-          username: user.username,
-          email: user.email,
-          organizationId: user.organizationId,
-          organizationRole: user.organizationRole,
-        },
-      },
-      "Login successful",
-    ).send(res);
+    const authUser = await getUserAuthPayload(user.id);
+
+    if (!authUser) {
+      return new ApiResponse(404, null, "User not found").send(res);
+    }
+
+    return new ApiResponse(200, authUser, "Login successful").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
@@ -108,21 +90,11 @@ export const getUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.user!;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        email: true,
-        username: true,
-        organizationId: true,
-        organizationRole: true,
-      },
-    });
+    const user = await getUserAuthPayload(userId);
 
     if (!user) return new ApiResponse(404, null, "User not found").send(res);
 
-    return new ApiResponse(200, { user }, "User fetched successfully").send(
-      res,
-    );
+    return new ApiResponse(200, user, "User fetched successfully").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

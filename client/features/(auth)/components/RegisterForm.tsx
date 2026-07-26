@@ -1,7 +1,6 @@
 import { FormInputGroup } from "@/components/common/form/FormInputGroup";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
-import Link from "next/link";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
 import type { RegisterFormTypes } from "../hooks/useSignupPage";
 
@@ -76,12 +75,6 @@ const RegisterForm = ({
             </field.InputGroup>
           )}
         </form.AppField>
-        <Link
-          href="/forgot-password"
-          className="text-xs text-muted-foreground text-right hover:text-blue-500"
-        >
-          Forgot password?
-        </Link>
         <form.AppField name="privacyPolicy">
           {(field) => (
             <field.Checkbox
@@ -91,7 +84,7 @@ const RegisterForm = ({
           )}
         </form.AppField>
       </FieldGroup>
-      <Button type="submit" className="w-full mt-5" disabled={loading}>
+      <Button type="submit" className="w-full mt-5 h-11" disabled={loading}>
         {loading ? (
           <div className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" /> Registering...

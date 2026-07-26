@@ -1,18 +1,30 @@
 import { apiFetch } from "@/lib/utils/apiClient";
-import { RegisterInputs, User } from "./types";
+import type { LoginInputs, RegisterInputs, User } from "./types";
 
-export const loginUser = (data: { email: string; password: string }) =>
-  apiFetch<User>("/auth/login", {
+export const loginUser = (data: LoginInputs) =>
+  apiFetch<User>("/auth/signin", {
     method: "POST",
     body: data,
     fallbackErrorMessage: "Invalid credentials",
   });
 
 export const registerUser = (data: RegisterInputs) =>
-  apiFetch<User>("/auth/register", {
+  apiFetch<User>("/auth/signup", {
     method: "POST",
     body: data,
     fallbackErrorMessage: "Failed to register",
+  });
+
+export const getCurrentUser = () =>
+  apiFetch<User>("/auth/user", {
+    method: "GET",
+    fallbackErrorMessage: "Failed to fetch current user",
+  });
+
+export const logoutUser = () =>
+  apiFetch<null>("/auth/signout", {
+    method: "POST",
+    fallbackErrorMessage: "Failed to logout",
   });
 
 export const getResetPasswordLink = (email: string) =>
@@ -31,15 +43,4 @@ export const resetPassword = (data: {
     method: "POST",
     body: data,
     fallbackErrorMessage: "Failed to reset password",
-  });
-
-export const getCurrentUser = () =>
-  apiFetch<User>("/auth/me", {
-    fallbackErrorMessage: "Failed to fetch current user",
-  });
-
-export const logoutUser = () =>
-  apiFetch<null>("/auth/logout", {
-    method: "POST",
-    fallbackErrorMessage: "Failed to logout",
   });

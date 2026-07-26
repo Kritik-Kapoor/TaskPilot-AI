@@ -4,6 +4,9 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import { ApiResponse } from "./utils/apiResponse.js";
+import authRoutes from "./routes/auth.route.js";
+import organizationRoutes from "./routes/organization.route.js";
+import projectRoutes from "./routes/project.route.js";
 
 dotenv.config();
 
@@ -26,6 +29,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/health", (_req, res) => {
   return new ApiResponse(200, null, "SERVER IS CONNECTED").send(res);
 });
+app.use("/auth", authRoutes);
+app.use("/organization", organizationRoutes);
+app.use("/project", projectRoutes);
 
 app.listen(3001, () => {
   console.log("Server is running on port 3001");

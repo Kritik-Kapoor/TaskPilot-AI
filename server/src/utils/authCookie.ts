@@ -1,6 +1,6 @@
 import type { CookieOptions, Response } from "express";
 
-export const AUTH_COOKIE_NAME = "taskpilot-token";
+export const AUTH_COOKIE_NAME = "taskpilot";
 
 export function getAuthCookieOptions(
   overrides: CookieOptions = {},

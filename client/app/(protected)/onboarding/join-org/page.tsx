@@ -1,50 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OrgCard } from "@/components/common/OrgCard";
-import { searchOrgs } from "@/lib/mock-orgs";
+import useJoinOrgPage from "@/features/(onboarding)/hooks/useJoinOrgPage";
+import type { JoinRequestStatus } from "@/features/(onboarding)/types";
+
+const JOIN_REQUEST_STATUS_MESSAGES: Record<
+  JoinRequestStatus,
+  { message: string; className: string }
+> = {
+  PENDING: {
+    message: "Request sent — an admin will review shortly.",
+    className: "text-success",
+  },
+  DECLINED: {
+    message: "Your request was declined. You can send a new request below.",
+    className: "text-destructive",
+  },
+  APPROVED: {
+    message: "Your request was approved.",
+    className: "text-success",
+  },
+};
+
+const getOrgCardAction = (
+  status: JoinRequestStatus | undefined,
+): "join" | "requested" | "declined" => {
+  if (status === "PENDING") {
+    return "requested";
+  }
+
+  return "join";
+};
 
 const JoinOrgPage = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialQuery = searchParams.get("q") ?? "";
-
-  const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<ReturnType<typeof searchOrgs>>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [requested, setRequested] = useState<string | null>(null);
-
-  useEffect(() => {
-    const trimmedQuery = query.trim();
-
-    if (!trimmedQuery) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-
-    const timeoutId = window.setTimeout(() => {
-      setResults(searchOrgs(trimmedQuery));
-      setIsSearching(false);
-    }, 350);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [query]);
-
-  const handleJoin = (slug: string) => {
-    setRequested(slug);
-
-    window.setTimeout(() => {
-      router.push("/dashboard");
-    }, 800);
-  };
+  const {
+    state: {
+      query,
+      searchedOrganizations,
+      myJoinRequests,
+      isSearching,
+      isLoadingJoinRequests,
+      joinRequestsError,
+      requestingOrganizationId,
+      searchError,
+      getOrgJoinRequestStatus,
+    },
+    actions: { setQuery, requestJoin },
+  } = useJoinOrgPage();
 
   return (
     <div>
@@ -79,40 +85,134 @@ const JoinOrgPage = () => {
       </div>
 
       <div className="mt-6 space-y-3">
-        {query.trim() && !isSearching && results.length === 0 && (
+        {joinRequestsError && (
+          <div className="rounded-xl border border-dashed border-red-500 bg-red-50 p-8 text-center">
+            <p className="text-sm font-medium text-red-500">
+              Sorry, something went wrong!
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Error loading your join requests. Please refresh the page.
+            </p>
+          </div>
+        )}
+
+        {!query.trim() && isLoadingJoinRequests && (
+          <div className="rounded-xl border border-dashed border-border bg-surface-elevated p-8 text-center">
+            <Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Loading your join requests...
+            </p>
+          </div>
+        )}
+
+        {!query.trim() && !isLoadingJoinRequests && myJoinRequests.length > 0 && (
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-sm font-medium text-foreground">
+                Your join requests
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Organizations you&apos;ve requested to join and their status.
+              </p>
+            </div>
+
+            {myJoinRequests.map((request) => (
+              <div key={request.id}>
+                <OrgCard
+                  org={request.organization}
+                  action={
+                    request.status === "PENDING" ? "requested" : "declined"
+                  }
+                />
+                <p
+                  className={`mt-1.5 ml-1 text-xs ${JOIN_REQUEST_STATUS_MESSAGES[request.status].className}`}
+                >
+                  {JOIN_REQUEST_STATUS_MESSAGES[request.status].message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {searchError && (
+          <div className="rounded-xl border border-dashed border-red-500 bg-red-50 p-8 text-center">
+            <p className="text-sm font-medium text-red-500">
+              Sorry, something went wrong!
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Error searching organizations. Please try again.
+            </p>
+          </div>
+        )}
+
+        {isSearching && (
           <div className="rounded-xl border border-dashed border-border bg-surface-elevated p-8 text-center">
             <p className="text-sm font-medium text-foreground">
-              No organizations found for &quot;{query}&quot;
+              Searching for organizations matching &quot;{query}&quot;
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               Double-check the spelling or ask a teammate for the exact name.
             </p>
-            <Button asChild variant="outline" className="mt-4">
-              <Link href="/onboarding/create-org">Create it instead</Link>
-            </Button>
+            <Loader2 className="mx-auto mt-4 h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {!query.trim() && (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            Start typing to search for organizations.
-          </p>
-        )}
-
-        {results.map((org) => (
-          <div key={org.slug}>
-            <OrgCard
-              org={org}
-              action={requested === org.slug ? "none" : "join"}
-              onAction={() => handleJoin(org.slug)}
-            />
-            {requested === org.slug && (
-              <p className="mt-1.5 ml-1 text-xs text-success">
-                ✓ Request sent — an admin will review shortly.
+        {query.trim() &&
+          !isSearching &&
+          searchedOrganizations?.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border bg-surface-elevated p-8 text-center">
+              <p className="text-sm font-medium text-foreground">
+                No organizations found for &quot;{query}&quot;
               </p>
-            )}
-          </div>
-        ))}
+              <p className="mt-1 text-sm text-muted-foreground">
+                Double-check the spelling or ask a teammate for the exact name.
+              </p>
+              <Button asChild variant="outline" className="mt-4">
+                <Link href="/onboarding/create-org">Create it instead</Link>
+              </Button>
+            </div>
+          )}
+
+        {!query.trim() &&
+          !isLoadingJoinRequests &&
+          myJoinRequests.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Start typing to search for organizations.
+            </p>
+          )}
+
+        {searchedOrganizations?.map((org) => {
+          const requestStatus = getOrgJoinRequestStatus(org.id);
+          const action = getOrgCardAction(requestStatus);
+          const statusMessage = requestStatus
+            ? JOIN_REQUEST_STATUS_MESSAGES[requestStatus]
+            : null;
+
+          return (
+            <div key={org.id}>
+              <OrgCard
+                org={org}
+                action={action}
+                isLoading={requestingOrganizationId === org.id}
+                onAction={
+                  action === "join" ? () => requestJoin(org) : undefined
+                }
+              />
+              {statusMessage && action !== "join" && (
+                <p className={`mt-1.5 ml-1 text-xs ${statusMessage.className}`}>
+                  {statusMessage.message}
+                </p>
+              )}
+              {requestStatus === "DECLINED" && action === "join" && (
+                <p
+                  className={`mt-1.5 ml-1 text-xs ${JOIN_REQUEST_STATUS_MESSAGES.DECLINED.className}`}
+                >
+                  {JOIN_REQUEST_STATUS_MESSAGES.DECLINED.message}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-10 text-sm text-muted-foreground">

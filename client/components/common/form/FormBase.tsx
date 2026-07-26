@@ -12,6 +12,7 @@ export type FormControlProps = {
   label: string;
   description?: string;
   placeholder?: string;
+  optional?: boolean;
 };
 
 type FormBaseProps = FormControlProps & {
@@ -26,12 +27,16 @@ export function FormBase({
   description,
   controlFirst,
   horizontal,
+  optional = false,
 }: FormBaseProps) {
   const field = useFieldContext();
   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
   const labelElement = (
     <>
-      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+      <FieldLabel htmlFor={field.name}>
+        {label}
+        {optional && <span className="text-muted-foreground"> (optional)</span>}
+      </FieldLabel>
       {description && <FieldDescription>{description}</FieldDescription>}
     </>
   );

@@ -1,24 +1,24 @@
 "use client";
 
 import useAuth from "@/lib/hooks/useAuth";
+import { getPostAuthPath } from "@/lib/utils/postAuthPath";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 type AuthGuardProps = {
   children: ReactNode;
-  redirectTo?: string;
 };
 
-const AuthGuard = ({ children, redirectTo = "/dashboard" }: AuthGuardProps) => {
-  const { isAuthenticated, isLoading } = useAuth();
+const AuthGuard = ({ children }: AuthGuardProps) => {
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace(redirectTo);
+    if (!isLoading && isAuthenticated && user) {
+      router.replace(getPostAuthPath(user));
     }
-  }, [isAuthenticated, isLoading, redirectTo, router]);
+  }, [isAuthenticated, isLoading, router, user]);
 
   if (isLoading) {
     return (

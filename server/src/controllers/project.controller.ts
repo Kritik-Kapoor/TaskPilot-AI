@@ -5,38 +5,58 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 import { prisma } from "../config/db.js";
-import { ensureOrgOwnerIsProjectAdmin } from "../utils/projectMember.utils.js";
+import type {
+  CreateProjectInput,
+  ProjectIdParams,
+  UpdateProjectInput,
+  UpdateProjectMemberBody,
+  UpdateProjectMemberParams,
+} from "../schemas/project.schema.js";
+import {
+  canCreateOrgProjects,
+  canUpdateProjectDetails,
+  createProjectWithMembership,
+  DUPLICATE_PROJECT_NAME_MESSAGE,
+  findConflictingProject,
+  findProjectInOrg,
+  getOrgMember,
+  getProjectMembership,
+  isDuplicateProjectNameError,
+  normalizeProjectName,
+} from "../services/project.service.js";
 
 export const createProject = async (req: Request, res: Response) => {
   try {
-    const { name, description } = req.body;
+    const { name, description } = req.validated!.body as CreateProjectInput;
     const { userId, orgId } = req.user!;
 
     if (!userId || !orgId)
       return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!name) return new ApiResponse(400, null, "Name is required").send(res);
 
-    const project = await prisma.$transaction(async (tx) => {
-      const project = await tx.project.create({
-        data: {
-          projectName: name,
-          description,
-          organizationId: orgId,
-        },
-      });
+    const user = await getOrgMember(userId, orgId);
 
-      await tx.projectMember.create({
-        data: {
-          userId,
-          projectId: project.id,
-          role: "ADMIN",
-        },
-      });
+    if (!canCreateOrgProjects(user?.organizationRole)) {
+      return new ApiResponse(
+        403,
+        null,
+        "Only organization owners or admins can create projects",
+      ).send(res);
+    }
 
-      await ensureOrgOwnerIsProjectAdmin(tx, orgId, project.id);
+    const conflictingProject = await findConflictingProject(orgId, name);
 
-      return project;
-    });
+    if (conflictingProject) {
+      return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
+        res,
+      );
+    }
+
+    const project = await createProjectWithMembership(
+      orgId,
+      userId,
+      name,
+      description ?? null,
+    );
 
     return new ApiResponse(
       200,
@@ -44,18 +64,22 @@ export const createProject = async (req: Request, res: Response) => {
       "Project created successfully",
     ).send(res);
   } catch (error) {
+    if (isDuplicateProjectNameError(error)) {
+      return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
+        res,
+      );
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
 export const getProject = async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params as { projectId: string };
+    const { projectId } = req.validated!.params as ProjectIdParams;
     const { orgId } = req.user!;
 
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!projectId)
-      return new ApiResponse(400, null, "Project ID is required").send(res);
 
     const project = await prisma.project.findFirst({
       where: { id: projectId },
@@ -91,12 +115,10 @@ export const getProject = async (req: Request, res: Response) => {
 
 export const deleteProject = async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params as { projectId: string };
+    const { projectId } = req.validated!.params as ProjectIdParams;
     const { userId, orgId } = req.user!;
 
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!projectId)
-      return new ApiResponse(400, null, "Project ID is required").send(res);
 
     const membership = await prisma.projectMember.findUnique({
       where: {
@@ -125,68 +147,79 @@ export const deleteProject = async (req: Request, res: Response) => {
 
 export const updateProject = async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params as { projectId: string };
-    const { name, description } = req.body as {
-      name?: string;
-      description?: string;
-    };
     const { userId, orgId } = req.user!;
+    const { projectId } = req.validated!.params as ProjectIdParams;
+    const body = req.validated!.body as UpdateProjectInput;
 
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!projectId)
-      return new ApiResponse(400, null, "Project ID is required").send(res);
-    if (!name && !description)
-      return new ApiResponse(400, null, "Name or description is required").send(
-        res,
-      );
 
-    const userRole = await prisma.projectMember.findUnique({
-      where: {
-        userId_projectId: { userId, projectId },
-      },
-      select: { role: true },
-    });
+    const [user, projectMembership, existingProject] = await Promise.all([
+      getOrgMember(userId, orgId),
+      getProjectMembership(userId, projectId),
+      findProjectInOrg(projectId, orgId),
+    ]);
 
-    if (userRole?.role !== "ADMIN")
+    if (
+      !canUpdateProjectDetails(user?.organizationRole, projectMembership?.role)
+    ) {
       return new ApiResponse(
         403,
         null,
         "You are not authorized to update this project",
       ).send(res);
+    }
+
+    if (!existingProject) {
+      return new ApiResponse(404, null, "Project not found").send(res);
+    }
+
+    const { name, description } = body;
+
+    if (name !== undefined) {
+      const conflictingProject = await findConflictingProject(
+        orgId,
+        name,
+        projectId,
+      );
+
+      if (conflictingProject) {
+        return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
+          res,
+        );
+      }
+    }
 
     const project = await prisma.project.update({
       where: { id: projectId },
-      data: req.body,
+      data: {
+        ...(name !== undefined && { projectName: normalizeProjectName(name) }),
+        ...(description !== undefined && { description }),
+      },
     });
 
     return new ApiResponse(200, project, "Project updated successfully").send(
       res,
     );
   } catch (error) {
+    if (isDuplicateProjectNameError(error)) {
+      return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
+        res,
+      );
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
 export const updateProjectMember = async (req: Request, res: Response) => {
   try {
-    const { projectId, action } = req.params as {
-      projectId: string;
-      action: string;
-    };
-    const { userToUpdateId, role: assignRole } = req.body as {
-      userToUpdateId?: string;
-      role?: "ADMIN" | "MEMBER" | "VIEWER";
-    };
+    const { projectId, action } = req.validated!
+      .params as UpdateProjectMemberParams;
+    const { userToUpdateId, role: assignRole } = req.validated!
+      .body as UpdateProjectMemberBody;
     const { userId, orgId } = req.user!;
 
     if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
-    if (!projectId)
-      return new ApiResponse(400, null, "Project ID is required").send(res);
-
-    if (!["add", "remove", "update"].includes(action))
-      return new ApiResponse(400, null, "Invalid action").send(res);
-    if (!userToUpdateId)
-      return new ApiResponse(400, null, "User ID is required").send(res);
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, organizationId: orgId },

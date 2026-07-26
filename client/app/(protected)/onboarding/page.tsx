@@ -1,4 +1,4 @@
-import ChoosePathOptions from "@/features/onboarding/components/ChoosePathOptions";
+import ChoosePathOptions from "@/features/(onboarding)/components/ChoosePathOptions";
 import { PROJECT_NAME } from "@/lib/constants/utils";
 
 const OnboardingPage = () => {
