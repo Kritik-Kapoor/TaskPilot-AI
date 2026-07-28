@@ -6,10 +6,13 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 import bcrypt from "bcryptjs";
-import { generateAccessToken } from "../utils/generateToken.js";
-import { clearAuthCookie } from "../utils/authCookie.js";
+import { issueAuthTokens } from "../utils/generateToken.js";
+import { clearAuthCookies, REFRESH_COOKIE_NAME } from "../utils/authCookie.js";
 import type { SigninInput, SignupInput } from "../schemas/auth.schema.js";
-import { getUserAuthPayload } from "../services/auth.service.js";
+import {
+  getUserAuthPayload,
+  refreshAuthSession,
+} from "../services/auth.service.js";
 
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -33,7 +36,7 @@ export const signup = async (req: Request, res: Response) => {
       },
     });
 
-    generateAccessToken({ userId: user.id, orgId: null }, res);
+    issueAuthTokens(res, { userId: user.id, orgId: null });
 
     return new ApiResponse(
       200,
@@ -63,7 +66,7 @@ export const signin = async (req: Request, res: Response) => {
     if (!isPasswordValid)
       return new ApiResponse(401, null, "Invalid email or password").send(res);
 
-    generateAccessToken({ userId: user.id, orgId: user.organizationId }, res);
+    issueAuthTokens(res, { userId: user.id, orgId: user.organizationId });
 
     const authUser = await getUserAuthPayload(user.id);
 
@@ -79,8 +82,28 @@ export const signin = async (req: Request, res: Response) => {
 
 export const signout = async (req: Request, res: Response) => {
   try {
-    clearAuthCookie(res);
+    clearAuthCookies(res);
     return new ApiResponse(200, null, "Signout successful").send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
+
+    if (!token)
+      return new ApiResponse(401, null, "Refresh token not provided").send(res);
+
+    const session = await refreshAuthSession(token, res);
+
+    if (!session) {
+      clearAuthCookies(res);
+      return new ApiResponse(401, null, "Invalid refresh token").send(res);
+    }
+
+    return new ApiResponse(200, null, "Token refreshed successfully").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

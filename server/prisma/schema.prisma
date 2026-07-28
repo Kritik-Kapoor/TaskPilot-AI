@@ -8,53 +8,118 @@ datasource db {
 }
 
 model User {
-  id               String            @id @default(uuid())
-  username         String
-  email            String            @unique
-  passwordHash     String
-  isPrivacyPolicyAccepted Boolean @default(false)
-  organizationId   String?
-  organizationRole OrganizationRole?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  organization         Organization?  @relation("OrganizationMembers", fields: [organizationId], references: [id], onDelete: SetNull)
-  organizationAsOwner  Organization?  @relation("OrganizationOwner")
-  createdOrganizations Organization[] @relation("OrganizationCreator")
-  projectMembers       ProjectMember[]
-  joinRequests         OrganizationJoinRequest[]
-  approvedJoinRequests OrganizationJoinRequest[] @relation("ApprovedJoinRequests")
-  createdProjects      Project[] @relation("ProjectCreator")
+  id                      String                    @id @default(uuid())
+  username                String
+  email                   String                    @unique
+  passwordHash            String
+  isPrivacyPolicyAccepted Boolean                   @default(false)
+  organizationId          String?
+  organizationRole        OrganizationRole?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  organization            Organization?             @relation("OrganizationMembers", fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationAsOwner     Organization?             @relation("OrganizationOwner")
+  createdOrganizations    Organization[]            @relation("OrganizationCreator")
+  projectMembers          ProjectMember[]
+  joinRequests            OrganizationJoinRequest[]
+  approvedJoinRequests    OrganizationJoinRequest[] @relation("ApprovedJoinRequests")
+  createdProjects         Project[]                 @relation("ProjectCreator")
+  assignedTickets         Ticket[]                  @relation("TicketAssignee")
+  createdTickets          Ticket[]                  @relation("TicketCreator")
+  comments Comment[]
+
   @@index([organizationId])
 }
 
 model Organization {
-  id          String   @id @default(uuid())
-  orgName     String   @unique
-  description String?
-  ownerId     String   @unique
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  owner     User      @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  createdBy User?     @relation("OrganizationCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  members   User[]    @relation("OrganizationMembers")
-  projects  Project[]
+  id           String                    @id @default(uuid())
+  orgName      String                    @unique
+  description  String?
+  ownerId      String                    @unique
+  createdById  String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  owner        User                      @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdBy    User?                     @relation("OrganizationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  members      User[]                    @relation("OrganizationMembers")
+  projects     Project[]
   joinRequests OrganizationJoinRequest[]
+
   @@index([createdById])
 }
 
 model Project {
   id             String   @id @default(uuid())
   organizationId String
+  projectKey     String
   projectName    String
   description    String?
   createdById    String?
-  createdBy      User?     @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  members      ProjectMember[]
+  createdBy      User?           @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  tickets        Ticket[]
+  columns        BoardColumn[]
+
   @@unique([organizationId, projectName])
+  @@unique([organizationId, projectKey])
+}
+
+model BoardColumn {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String
+  position  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tickets   Ticket[]
+
+  @@index([projectId, position])
+}
+
+model Ticket {
+  id          String         @id @default(uuid())
+  columnId    String
+  projectId   String
+  ticketKey   String
+  title       String
+  description String?
+  priority    TicketPriority @default(MEDIUM)
+  type        TicketType     @default(TASK)
+  assigneeId  String?
+  position    Int
+  labels      String[]       @default([])
+  storyPoints Int?
+  createdById String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  column      BoardColumn    @relation(fields: [columnId], references: [id], onDelete: Restrict)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?          @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy   User?          @relation("TicketCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  comments Comment[]
+
+  @@unique([projectId, ticketKey])
+  @@index([columnId, position])
+  @@index([assigneeId])
+  @@index([projectId])
+}
+
+model Comment {
+  id String @id @default(uuid())
+  ticketId String
+  userId String
+  content String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }
 
 model ProjectMember {
@@ -66,6 +131,7 @@ model ProjectMember {
   updatedAt DateTime    @updatedAt
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
   @@unique([userId, projectId])
   @@index([projectId])
 }
@@ -82,6 +148,7 @@ model OrganizationJoinRequest {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   approvedBy   User?        @relation("ApprovedJoinRequests", fields: [approvedById], references: [id], onDelete: SetNull)
+
   @@index([organizationId, status])
   @@index([userId, status])
 }
@@ -102,4 +169,18 @@ enum ProjectRole {
   ADMIN
   MEMBER
   VIEWER
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketType {
+  STORY
+  BUG
+  TASK
+  EPIC
 }

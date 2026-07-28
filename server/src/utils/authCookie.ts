@@ -1,6 +1,10 @@
 import type { CookieOptions, Response } from "express";
 
 export const AUTH_COOKIE_NAME = "taskpilot";
+export const REFRESH_COOKIE_NAME = "taskpilot_refresh";
+
+const ACCESS_TOKEN_MAX_AGE_MS = 1000 * 60 * 30; // 30 minutes
+const REFRESH_TOKEN_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export function getAuthCookieOptions(
   overrides: CookieOptions = {},
@@ -27,11 +31,30 @@ export function setAuthCookie(res: Response, token: string) {
     AUTH_COOKIE_NAME,
     token,
     getAuthCookieOptions({
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: ACCESS_TOKEN_MAX_AGE_MS,
+    }),
+  );
+}
+
+export function setRefreshCookie(res: Response, token: string) {
+  return res.cookie(
+    REFRESH_COOKIE_NAME,
+    token,
+    getAuthCookieOptions({
+      maxAge: REFRESH_TOKEN_MAX_AGE_MS,
     }),
   );
 }
 
 export function clearAuthCookie(res: Response) {
   return res.clearCookie(AUTH_COOKIE_NAME, getAuthCookieOptions());
+}
+
+export function clearRefreshCookie(res: Response) {
+  return res.clearCookie(REFRESH_COOKIE_NAME, getAuthCookieOptions());
+}
+
+export function clearAuthCookies(res: Response) {
+  clearAuthCookie(res);
+  clearRefreshCookie(res);
 }

@@ -22,7 +22,7 @@ import {
   getOrgMember,
   getProjectMembership,
   isDuplicateProjectNameError,
-  normalizeProjectName,
+  updateProjectDetails,
 } from "../services/project.service.js";
 
 export const createProject = async (req: Request, res: Response) => {
@@ -45,11 +45,10 @@ export const createProject = async (req: Request, res: Response) => {
 
     const conflictingProject = await findConflictingProject(orgId, name);
 
-    if (conflictingProject) {
+    if (conflictingProject)
       return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
         res,
       );
-    }
 
     const project = await createProjectWithMembership(
       orgId,
@@ -189,13 +188,15 @@ export const updateProject = async (req: Request, res: Response) => {
       }
     }
 
-    const project = await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        ...(name !== undefined && { projectName: normalizeProjectName(name) }),
+    const project = await updateProjectDetails(
+      projectId,
+      orgId,
+      {
+        ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
       },
-    });
+      existingProject,
+    );
 
     return new ApiResponse(200, project, "Project updated successfully").send(
       res,

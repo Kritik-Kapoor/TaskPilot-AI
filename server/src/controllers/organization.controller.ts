@@ -5,7 +5,7 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 import { prisma } from "../config/db.js";
-import { generateAccessToken } from "../utils/generateToken.js";
+import { issueAuthTokens } from "../utils/generateToken.js";
 import { ensureUserIsProjectAdminOnAllOrgProjects } from "../utils/projectMember.utils.js";
 import type {
   CheckOrganizationNameQuery,
@@ -58,7 +58,7 @@ export const createOrganization = async (req: Request, res: Response) => {
         userId,
       );
 
-      generateAccessToken({ userId, orgId: organization.id }, res);
+      issueAuthTokens(res, { userId, orgId: organization.id });
 
       return new ApiResponse(
         201,
@@ -103,6 +103,8 @@ export const createOrganization = async (req: Request, res: Response) => {
         orgName: true,
       },
     });
+
+    issueAuthTokens(res, { userId, orgId: organization.id });
 
     return new ApiResponse(
       200,
@@ -462,6 +464,7 @@ export const getProjectsList = async (req: Request, res: Response) => {
       select: {
         id: true,
         projectName: true,
+        projectKey: true,
         description: true,
         members: {
           where: { userId },
