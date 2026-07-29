@@ -7,6 +7,7 @@ import { ApiResponse } from "./utils/apiResponse.js";
 import authRoutes from "./routes/auth.route.js";
 import organizationRoutes from "./routes/organization.route.js";
 import projectRoutes from "./routes/project.route.js";
+import ticketRoutes from "./routes/ticket.route.js";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use("/health", (_req, res) => {
 app.use("/auth", authRoutes);
 app.use("/organization", organizationRoutes);
 app.use("/project", projectRoutes);
+app.use("/ticket", ticketRoutes);
 
 app.listen(3001, () => {
   console.log("Server is running on port 3001");

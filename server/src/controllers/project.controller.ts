@@ -24,6 +24,7 @@ import {
   isDuplicateProjectNameError,
   updateProjectDetails,
 } from "../services/project.service.js";
+import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
 
 export const createProject = async (req: Request, res: Response) => {
   try {
@@ -371,6 +372,36 @@ export const updateProjectMember = async (req: Request, res: Response) => {
       200,
       projectMember,
       "Project member updated successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getUserRoleInProject = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.validated!.params as GetUserRoleInProjectInput;
+    const { userId, orgId } = req.user!;
+
+    if (!orgId)
+      return new ApiResponse(
+        401,
+        null,
+        "Not authorized, not part of the organization",
+      ).send(res);
+
+    const projectMember = await prisma.projectMember.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      select: { role: true },
+    });
+
+    if (!projectMember)
+      return new ApiResponse(404, null, "User not found in project").send(res);
+
+    return new ApiResponse(
+      200,
+      projectMember.role,
+      "User role fetched successfully",
     ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);

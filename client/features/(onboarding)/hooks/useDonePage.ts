@@ -1,5 +1,6 @@
 "use client";
 
+import { workspacePath } from "@/features/(workspace)/lib/projectUrl";
 import { useEffect, useState } from "react";
 import { deSlugify } from "../lib/orgUtils";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,9 +25,13 @@ const useDonePage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectSlug = searchParams.get("project");
+  const projectId = searchParams.get("projectId");
 
   const projectName = projectSlug ? deSlugify(projectSlug) : null;
   const shouldInitialize = Boolean(projectSlug);
+  const dashboardHref = projectId
+    ? workspacePath("/dashboard", projectId)
+    : "/dashboard";
 
   const [progress, setProgress] = useState(0);
   const [statusLabel, setStatusLabel] = useState<string>(
@@ -50,14 +55,14 @@ const useDonePage = () => {
     }, 50);
 
     const timeoutId = window.setTimeout(() => {
-      router.push("/dashboard");
+      router.push(dashboardHref);
     }, INITIALIZATION_DURATION_MS);
 
     return () => {
       window.clearInterval(intervalId);
       window.clearTimeout(timeoutId);
     };
-  }, [shouldInitialize, router]);
+  }, [dashboardHref, shouldInitialize, router]);
 
   return {
     state: {
@@ -65,6 +70,7 @@ const useDonePage = () => {
       statusLabel,
       projectName,
       shouldInitialize,
+      dashboardHref,
     },
   };
 };

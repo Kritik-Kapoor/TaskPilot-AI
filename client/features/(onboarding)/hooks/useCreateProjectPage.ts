@@ -33,7 +33,7 @@ const useCreateProjectPage = () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       toast.success("Project created successfully");
       router.push(
-        `/onboarding/done?org=${orgSlug ?? ""}&project=${encodeURIComponent(slugify(project.projectName))}`,
+        `/onboarding/done?org=${orgSlug ?? ""}&project=${encodeURIComponent(slugify(project.projectName))}&projectId=${project.id}`,
       );
     },
     onError: (error) => {

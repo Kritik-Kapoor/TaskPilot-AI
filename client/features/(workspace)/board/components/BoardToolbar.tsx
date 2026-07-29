@@ -61,6 +61,7 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
           <Button
             size="sm"
             className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
+            onClick={actions.openCreateTicketDialog}
           >
             <Plus className="h-4 w-4" /> New ticket
           </Button>

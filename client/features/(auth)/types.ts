@@ -1,5 +1,7 @@
 export type OrganizationRole = "OWNER" | "ADMIN" | "MEMBER";
 
+export type ProjectRole = "ADMIN" | "MEMBER" | "VIEWER";
+
 export type User = {
   username: string;
   email: string;

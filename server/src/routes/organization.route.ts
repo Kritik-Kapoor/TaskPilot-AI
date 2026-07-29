@@ -12,6 +12,7 @@ import {
   updateOrganization,
 } from "../controllers/organization.controller.js";
 import { authenticateUser } from "../middlewares/authenticateUser.middleware.js";
+import { authenticateWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { validate } from "../middlewares/validateSchema.middleware.js";
 import {
   checkOrganizationNameQuerySchema,
@@ -30,21 +31,21 @@ router.post(
   validate(createOrganizationSchema),
   createOrganization,
 );
-router.get("/", authenticateUser, getOrganization);
-router.delete("/", authenticateUser, deleteOrganization);
+router.get("/", authenticateWorkspaceUser, getOrganization);
+router.delete("/", authenticateWorkspaceUser, deleteOrganization);
 router.patch(
   "/",
-  authenticateUser,
+  authenticateWorkspaceUser,
   validate(updateOrganizationSchema),
   updateOrganization,
 );
 router.post(
   "/transfer-ownership/:newOwnerId",
-  authenticateUser,
+  authenticateWorkspaceUser,
   validate(transferOwnershipParamsSchema, "params"),
   transferOwnership,
 );
-router.get("/projects", authenticateUser, getProjectsList);
+router.get("/projects", authenticateWorkspaceUser, getProjectsList);
 router.get(
   "/search",
   authenticateUser,

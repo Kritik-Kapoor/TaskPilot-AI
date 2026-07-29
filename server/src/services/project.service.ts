@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import { ensureOrgOwnerIsProjectAdmin } from "../utils/projectMember.utils.js";
+import { seedDefaultBoardColumns } from "./boardColumn.service.js";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
 
 export const normalizeProjectName = (name: string) => name.toLowerCase();
@@ -87,6 +88,8 @@ export async function createProjectWithMembership(
     });
 
     await ensureOrgOwnerIsProjectAdmin(tx, orgId, project.id);
+
+    await seedDefaultBoardColumns(tx, project.id);
 
     return project;
   });

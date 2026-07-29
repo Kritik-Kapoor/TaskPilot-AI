@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/utils/apiClient";
-import type { LoginInputs, RegisterInputs, User } from "./types";
+import type { LoginInputs, ProjectRole, RegisterInputs, User } from "./types";
 
 export const loginUser = (data: LoginInputs) =>
   apiFetch<User>("/auth/signin", {
@@ -19,6 +19,12 @@ export const getCurrentUser = () =>
   apiFetch<User>("/auth/user", {
     method: "GET",
     fallbackErrorMessage: "Failed to fetch current user",
+  });
+
+export const getUserRoleInProject = (projectId: string) =>
+  apiFetch<ProjectRole>(`/project/${projectId}/role`, {
+    method: "GET",
+    fallbackErrorMessage: "Failed to fetch project role",
   });
 
 export const logoutUser = () =>

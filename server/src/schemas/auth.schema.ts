@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { projectIdParamsSchema } from "./project.schema.js";
 
 export const signupSchema = z.object({
   username: z
@@ -17,5 +18,12 @@ export const signinSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const getUserRoleInProjectSchema = z.object({
+  projectId: projectIdParamsSchema.shape.projectId,
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type SigninInput = z.infer<typeof signinSchema>;
+export type GetUserRoleInProjectInput = z.infer<
+  typeof getUserRoleInProjectSchema
+>;
