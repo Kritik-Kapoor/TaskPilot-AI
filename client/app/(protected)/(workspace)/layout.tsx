@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSidebar } from "@/components/common/Sidebar";
+import ProjectRoleWarningBannerSlot from "@/components/common/ProjectRoleWarningBannerSlot";
 import WorkspaceNavbar from "@/components/common/WorkspaceNavbar";
 import DashboardGuard from "@/components/guards/DashboardGuard";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -16,7 +17,8 @@ const WorkspaceLayout = ({ children }: { children: React.ReactNode }) => {
           <TooltipProvider>
             <SidebarProvider className="h-svh overflow-hidden">
               <AppSidebar />
-              <SidebarInset className="min-h-0 overflow-hidden">
+              <SidebarInset className="flex min-h-0 flex-col overflow-hidden">
+                <ProjectRoleWarningBannerSlot />
                 <WorkspaceNavbar />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6">
                   {children}

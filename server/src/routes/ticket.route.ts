@@ -2,11 +2,11 @@ import { Router } from "express";
 import {
   createTicketHandler,
   deleteTicketHandler,
+  getProjectBacklogTicketsHandler,
   getProjectTicketsHandler,
   getTicketByIdHandler,
   updateTicketHandler,
 } from "../controllers/ticket.controller.js";
-import { authenticateWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { validate } from "../middlewares/validateSchema.middleware.js";
 import {
   createTicketSchema,
@@ -17,30 +17,28 @@ import { projectIdParamsSchema } from "../schemas/project.schema.js";
 
 const router = Router();
 
-router.post(
-  "/",
-  authenticateWorkspaceUser,
-  validate(createTicketSchema),
-  createTicketHandler,
-);
+router.post("/", validate(createTicketSchema), createTicketHandler);
 
 router.get(
   "/project-board/:projectId",
-  authenticateWorkspaceUser,
   validate(projectIdParamsSchema, "params"),
   getProjectTicketsHandler,
 );
 
 router.get(
+  "/project-backlog/:projectId",
+  validate(projectIdParamsSchema, "params"),
+  getProjectBacklogTicketsHandler,
+);
+
+router.get(
   "/:projectId/:ticketId",
-  authenticateWorkspaceUser,
   validate(ticketIdParamsSchema, "params"),
   getTicketByIdHandler,
 );
 
 router.patch(
   "/:projectId/:ticketId",
-  authenticateWorkspaceUser,
   validate(ticketIdParamsSchema, "params"),
   validate(updateTicketSchema),
   updateTicketHandler,
@@ -48,7 +46,6 @@ router.patch(
 
 router.delete(
   "/:projectId/:ticketId",
-  authenticateWorkspaceUser,
   validate(ticketIdParamsSchema, "params"),
   deleteTicketHandler,
 );

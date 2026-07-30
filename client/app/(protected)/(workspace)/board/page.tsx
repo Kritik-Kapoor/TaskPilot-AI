@@ -1,16 +1,19 @@
 "use client";
 
 import FormDialog from "@/components/common/dialogs/FormDialog";
+import CreateTicketForm from "@/features/(workspace)/components/CreateTicketForm";
 import BoardColumns from "@/features/(workspace)/board/components/BoardColumns";
 import BoardToolbar from "@/features/(workspace)/board/components/BoardToolbar";
-import CreateTicketForm from "@/features/(workspace)/board/components/CreateTickerForm";
 import useBoardPage from "@/features/(workspace)/board/hooks/useBoardPage";
 import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { ChevronRight } from "lucide-react";
 
 const BoardPage = () => {
-  const { state, actions } = useBoardPage({
-    defaultCreateTicketStatus: "todo",
-  });
+  const { state, actions } = useBoardPage();
+
+  const projectName = state.activeProject
+    ? formatDisplayName(state.activeProject.projectName)
+    : undefined;
 
   return (
     <>
@@ -18,17 +21,27 @@ const BoardPage = () => {
         <BoardToolbar state={state} actions={actions} />
         <BoardColumns
           columns={state.columns}
-          ticketsByColumn={state.ticketsByColumn}
-          snapshotRef={state.snapshotRef}
-          setTicketsByColumn={actions.setTicketsByColumn}
-          onTicketReposition={actions.handleTicketReposition}
+          dndHandlers={actions.dndHandlers}
+          isLoading={state.isBoardLoading}
         />
       </div>
 
       <FormDialog
         isOpen={state.isCreateTicketOpen}
         onClose={actions.closeCreateTicketDialog}
-        title="Create ticket"
+        title={
+          <div className="flex items-center gap-1">
+            <div className="text-lg font-medium">Create ticket</div>
+            {projectName && (
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                <ChevronRight className="size-4" strokeWidth={1.5} /> Adding to{" "}
+                <span className="font-medium text-foreground">
+                  {projectName}
+                </span>
+              </p>
+            )}
+          </div>
+        }
         className="max-h-[90vh] overflow-y-auto sm:max-w-2xl md:max-w-2xl"
         closeOnOutsideClick={!state.isSubmittingCreateTicket}
       >
@@ -36,11 +49,6 @@ const BoardPage = () => {
           form={state.createTicketForm}
           isSubmitting={state.isSubmittingCreateTicket}
           members={state.members}
-          projectName={
-            state.activeProject
-              ? formatDisplayName(state.activeProject.projectName)
-              : undefined
-          }
           onCancel={actions.closeCreateTicketDialog}
         />
       </FormDialog>

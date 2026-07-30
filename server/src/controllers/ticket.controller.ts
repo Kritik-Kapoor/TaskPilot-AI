@@ -12,6 +12,7 @@ import type {
 import {
   createTicket,
   deleteTicket,
+  getProjectBacklogTickets,
   getProjectTickets,
   getTicketById,
   TicketServiceError,
@@ -35,7 +36,7 @@ export const createTicketHandler = async (req: Request, res: Response) => {
 
     const ticket = await createTicket(orgId, userId, body);
 
-    return new ApiResponse(201, { ticket }, "Ticket created successfully").send(
+    return new ApiResponse(201, ticket, "Ticket created successfully").send(
       res,
     );
   } catch (error) {
@@ -60,6 +61,26 @@ export const getProjectTicketsHandler = async (req: Request, res: Response) => {
   }
 };
 
+export const getProjectBacklogTicketsHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { projectId } = req.validated!.params as ProjectIdParams;
+    const { userId, orgId } = getWorkspaceUser(req);
+
+    const backlog = await getProjectBacklogTickets(orgId, userId, projectId);
+
+    return new ApiResponse(
+      200,
+      backlog,
+      "Project backlog fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return handleTicketServiceError(error, res);
+  }
+};
+
 export const getTicketByIdHandler = async (req: Request, res: Response) => {
   try {
     const { projectId, ticketId } = req.validated!.params as TicketIdParams;
@@ -67,7 +88,7 @@ export const getTicketByIdHandler = async (req: Request, res: Response) => {
 
     const ticket = await getTicketById(orgId, projectId, userId, ticketId);
 
-    return new ApiResponse(200, { ticket }, "Ticket fetched successfully").send(
+    return new ApiResponse(200, ticket, "Ticket fetched successfully").send(
       res,
     );
   } catch (error) {
@@ -83,7 +104,7 @@ export const updateTicketHandler = async (req: Request, res: Response) => {
 
     const ticket = await updateTicket(orgId, projectId, userId, ticketId, body);
 
-    return new ApiResponse(200, { ticket }, "Ticket updated successfully").send(
+    return new ApiResponse(200, ticket, "Ticket updated successfully").send(
       res,
     );
   } catch (error) {

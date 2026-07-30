@@ -14,11 +14,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getOrgColor } from "@/features/(onboarding)/lib/orgUtils";
-import {
-  formatDisplayName,
-  getInitials,
-} from "@/features/(workspace)/lib/utils";
+import { getColor, initialsOf } from "@/lib/utils/common";
+import { formatDisplayName } from "@/features/(workspace)/lib/utils";
 import { useProject } from "@/providers/projectProvider";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
@@ -29,8 +26,8 @@ const ProjectAvatar = ({
   name: string;
   inDropdown?: boolean;
 }) => {
-  const color = getOrgColor(name);
-  const initials = getInitials(name);
+  const color = getColor(name);
+  const initials = initialsOf(name);
 
   return (
     <div

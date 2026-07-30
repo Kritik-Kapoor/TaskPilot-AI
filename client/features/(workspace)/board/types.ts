@@ -1,34 +1,24 @@
-import type {
-  Ticket,
-  TicketPriority,
-  TicketStatus,
-  TicketType,
-} from "@/features/(onboarding)/lib/mock-app";
+import type { ProjectLabel } from "../types";
 
-export type BoardTicket = Ticket & {
-  columnId: string;
-  position: number;
-};
+export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type TicketType = "STORY" | "BUG" | "TASK" | "EPIC";
 
-export type ApiTicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-export type ApiTicketType = "STORY" | "BUG" | "TASK" | "EPIC";
-
-export type ApiBoardColumn = {
+export type BoardColumn = {
   id: string;
-  name: TicketStatus;
+  name: string;
   color: string | null;
   position: number;
 };
 
-export type ApiTicket = {
+export type Ticket = {
   id: string;
   ticketKey: string;
   title: string;
   description: string | null;
-  priority: ApiTicketPriority;
-  type: ApiTicketType;
+  priority: TicketPriority;
+  type: TicketType;
   position: number;
-  labels: string[];
+  labels: ProjectLabel[];
   storyPoints: number | null;
   columnId: string;
   projectId: string;
@@ -36,22 +26,25 @@ export type ApiTicket = {
   createdById: string;
   createdAt: string;
   updatedAt: string;
-  column?: ApiBoardColumn;
   assignee?: { id: string; username: string } | null;
 };
 
+export type ApiColumnWithTickets = BoardColumn & {
+  tickets: Ticket[];
+};
+
 export type ProjectBoardResponse = {
-  columns: ApiBoardColumn[];
-  tickets: ApiTicket[];
+  columns: ApiColumnWithTickets[];
+  totalTicketCount: number;
 };
 
 export type CreateTicketPayload = {
   projectId: string;
-  columnName: TicketStatus;
+  columnId: string;
   title: string;
   description?: string;
-  priority?: ApiTicketPriority;
-  type?: ApiTicketType;
+  priority?: TicketPriority;
+  type?: TicketType;
   assigneeId?: string | null;
   storyPoints?: number | null;
   labels?: string[];
@@ -60,65 +53,6 @@ export type CreateTicketPayload = {
 export type RepositionTicketPayload = {
   columnId: string;
   position: number;
-};
-
-export type ColumnIdByStatus = Record<TicketStatus, string>;
-
-export const PRIORITY_TO_API: Record<TicketPriority, ApiTicketPriority> = {
-  Low: "LOW",
-  Medium: "MEDIUM",
-  High: "HIGH",
-  Urgent: "URGENT",
-};
-
-export const TYPE_TO_API: Record<TicketType, ApiTicketType> = {
-  Story: "STORY",
-  Bug: "BUG",
-  Task: "TASK",
-  Epic: "EPIC",
-};
-
-const PRIORITY_FROM_API: Record<ApiTicketPriority, TicketPriority> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
-
-const TYPE_FROM_API: Record<ApiTicketType, TicketType> = {
-  STORY: "Story",
-  BUG: "Bug",
-  TASK: "Task",
-  EPIC: "Epic",
-};
-
-export const mapApiTicketToBoardTicket = (ticket: ApiTicket): BoardTicket => ({
-  id: ticket.id,
-  key: ticket.ticketKey,
-  title: ticket.title,
-  description: ticket.description ?? undefined,
-  status: ticket.column?.name ?? "todo",
-  priority: PRIORITY_FROM_API[ticket.priority],
-  type: TYPE_FROM_API[ticket.type],
-  assigneeId: ticket.assigneeId,
-  projectId: ticket.projectId,
-  labels: ticket.labels,
-  points: ticket.storyPoints ?? undefined,
-  updated: ticket.updatedAt,
-  columnId: ticket.columnId,
-  position: ticket.position,
-});
-
-export const buildColumnIdByStatus = (
-  columns: ApiBoardColumn[],
-): ColumnIdByStatus => {
-  const map = {} as ColumnIdByStatus;
-
-  for (const column of columns) {
-    map[column.name] = column.id;
-  }
-
-  return map;
 };
 
 const UUID_PATTERN =

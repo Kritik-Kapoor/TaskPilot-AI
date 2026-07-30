@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useId } from "react";
 import {
   Field,
   FieldContent,
@@ -6,6 +6,7 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
+import { useFieldGroupContext } from "@/components/ui/field-group-context";
 import { useFieldContext } from "./formContext";
 
 export type FormControlProps = {
@@ -13,6 +14,8 @@ export type FormControlProps = {
   description?: string;
   placeholder?: string;
   optional?: boolean;
+  hideLabel?: boolean;
+  controlClassName?: string;
 };
 
 type FormBaseProps = FormControlProps & {
@@ -28,9 +31,37 @@ export function FormBase({
   controlFirst,
   horizontal,
   optional = false,
+  hideLabel = false,
 }: FormBaseProps) {
   const field = useFieldContext();
+  const group = useFieldGroupContext();
+  const fieldId = useId();
   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+
+  useEffect(() => {
+    if (!group) return;
+    return group.register(fieldId);
+  }, [group, fieldId]);
+
+  useEffect(() => {
+    if (!group) return;
+    group.update(fieldId, { isInvalid, errors: field.state.meta.errors });
+  }, [group, fieldId, isInvalid, field.state.meta.errors]);
+
+  const errorElem =
+    isInvalid && !group ? (
+      <FieldError errors={field.state.meta.errors} />
+    ) : null;
+
+  if (hideLabel) {
+    return (
+      <>
+        {children}
+        {errorElem}
+      </>
+    );
+  }
+
   const labelElement = (
     <>
       <FieldLabel htmlFor={field.name}>
@@ -39,9 +70,6 @@ export function FormBase({
       </FieldLabel>
       {description && <FieldDescription>{description}</FieldDescription>}
     </>
-  );
-  const errorElem = isInvalid && (
-    <FieldError errors={field.state.meta.errors} />
   );
 
   return (

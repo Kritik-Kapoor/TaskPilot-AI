@@ -1,4 +1,5 @@
 import { ComponentProps, ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import {
   InputGroup,
   InputGroupAddon,
@@ -31,7 +32,7 @@ function FormInputGroupComponent({
 
   return (
     <FormBase {...props}>
-      <InputGroup className={groupClasses}>
+      <InputGroup className={cn(groupClasses)}>
         <InputGroupInput
           id={field.name}
           name={field.name}

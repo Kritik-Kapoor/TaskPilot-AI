@@ -1,102 +1,53 @@
 "use client";
 
 import { useAppForm } from "@/components/common/form/hooks";
-import {
-  MEMBERS,
-  STATUS_META,
-  type TicketPriority,
-  type TicketStatus,
-  type TicketType,
-} from "@/features/(onboarding)/lib/mock-app";
 import { useProject } from "@/providers/projectProvider";
-import { useQuery } from "@tanstack/react-query";
+import { move } from "@dnd-kit/helpers";
+import type { DragEndEvent, DragOverEvent } from "@dnd-kit/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
-import { createTicket, getProjectBoard, repositionTicket } from "../api";
-import { BOARD_COLUMNS } from "../constants";
+import useCreateTicket from "../../hooks/useCreateTicket";
+import { getProjectBoard, repositionTicket } from "../lib/api";
 import {
-  applyBoardTicketUpdate,
   computeRepositionPayload,
-  groupTicketsByStatus,
+  findTicketLocation,
+  getColumnIds,
+  toTicketsByColumn,
   type TicketsByColumn,
-} from "../lib/boardTickets";
+} from "../lib/utils/boardTickets";
+import type { RepositionResult } from "../lib/utils/boardTickets";
 import {
-  buildColumnIdByStatus,
-  isUuid,
-  mapApiTicketToBoardTicket,
-  PRIORITY_TO_API,
-  TYPE_TO_API,
-  type ColumnIdByStatus,
+  type Ticket,
+  type TicketPriority,
+  type TicketType,
+  type ProjectBoardResponse,
 } from "../types";
 
-export type { TicketsByColumn };
-
 export type BoardColumnData = {
-  status: TicketStatus;
-  label: string;
-  dotClassName: string;
-  items: Array<{ ticket: TicketsByColumn[TicketStatus][number]; dndIndex: number }>;
+  id: string;
+  name: string;
+  color: string | null;
+  items: Array<{
+    ticket: TicketsByColumn[string][number];
+    dndIndex: number;
+  }>;
 };
 
-const ticketTypeSchema = z.enum(["Story", "Bug", "Task", "Epic"]);
-
-const ticketPrioritySchema = z.enum(["Urgent", "High", "Medium", "Low"]);
-
-const createTicketFormSchema = z.object({
-  type: ticketTypeSchema,
-  priority: ticketPrioritySchema,
-  title: z
-    .string()
-    .trim()
-    .min(1, { message: "Title is required" })
-    .max(140, { message: "Title must be 140 characters or less" }),
-  description: z
-    .string()
-    .max(2000, { message: "Description must be 2000 characters or less" }),
-  assigneeId: z.string(),
-  storyPoints: z.string().superRefine((value, ctx) => {
-    if (!value.trim()) return;
-
-    const points = Number(value);
-    if (!Number.isInteger(points) || points < 0 || points > 100) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Story points must be a whole number between 0 and 100",
-      });
-    }
-  }),
-  labels: z.array(z.string()).max(8),
-});
-
-export type CreateTicketFormTypes = ReturnType<
+export type BoardFilterFormTypes = ReturnType<
   typeof useBoardPage
->["state"]["createTicketForm"];
+>["state"]["filterForm"];
 
-type UseBoardPageOptions = {
-  defaultCreateTicketStatus?: TicketStatus;
-};
-
-const findTicketLocation = (
-  board: TicketsByColumn,
-  ticketId: string,
-): { status: TicketStatus; index: number } | null => {
-  for (const status of BOARD_COLUMNS) {
-    const index = board[status].findIndex((ticket) => ticket.id === ticketId);
-    if (index !== -1) return { status, index };
-  }
-
-  return null;
+type BoardFilters = {
+  query: string;
+  assignee: string;
+  priority: TicketPriority | "all";
+  type: TicketType | "all";
 };
 
 const matchesFilter = (
-  ticket: TicketsByColumn[TicketStatus][number],
-  params: {
-    query: string;
-    assignee: string;
-    priority: TicketPriority | "all";
-    type: TicketType | "all";
-  },
+  ticket: TicketsByColumn[string][number],
+  params: BoardFilters,
 ): boolean => {
   const { query, assignee, priority, type } = params;
 
@@ -104,7 +55,7 @@ const matchesFilter = (
     query &&
     !(
       ticket.title.toLowerCase().includes(query.toLowerCase()) ||
-      ticket.key.toLowerCase().includes(query.toLowerCase())
+      ticket.ticketKey.toLowerCase().includes(query.toLowerCase())
     )
   ) {
     return false;
@@ -120,169 +71,266 @@ const matchesFilter = (
   return true;
 };
 
-const useBoardPage = ({
-  defaultCreateTicketStatus = "todo",
-}: UseBoardPageOptions = {}) => {
-  const { activeProject } = useProject();
+const optimisticReposition = (
+  old: ProjectBoardResponse,
+  ticketId: string,
+  result: RepositionResult,
+): ProjectBoardResponse => {
+  let movedTicket: Ticket | null = null;
 
-  const [query, setQuery] = useState("");
-  const [assignee, setAssignee] = useState<string>("all");
-  const [priority, setPriority] = useState<TicketPriority | "all">("all");
-  const [type, setType] = useState<TicketType | "all">("all");
-  const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
-  const [isSubmittingCreateTicket, setIsSubmittingCreateTicket] =
-    useState(false);
+  const columnsWithout = old.columns.map((col) => ({
+    ...col,
+    tickets: col.tickets.filter((t) => {
+      if (t.id === ticketId) {
+        movedTicket = { ...t };
+        return false;
+      }
+      return true;
+    }),
+  }));
 
-  const [ticketsByColumn, setTicketsByColumn] = useState<TicketsByColumn>(() =>
-    groupTicketsByStatus([]),
-  );
-  const snapshotRef = useRef<TicketsByColumn>(ticketsByColumn);
-  const columnIdByStatusRef = useRef<ColumnIdByStatus | null>(null);
+  if (!movedTicket) return old;
+
+  const updated: Ticket = {
+    ...(movedTicket as Ticket),
+    columnId: result.columnId,
+    position: result.position,
+  };
+
+  return {
+    ...old,
+    columns: columnsWithout.map((col) => {
+      if (col.id !== result.columnId) return col;
+      const tickets = [...col.tickets, updated].sort(
+        (a, b) => a.position - b.position,
+      );
+      return { ...col, tickets };
+    }),
+  };
+};
+
+const optimisticCreate = (
+  old: ProjectBoardResponse,
+  ticket: Ticket,
+  columnId: string,
+): ProjectBoardResponse => ({
+  ...old,
+  totalTicketCount: old.totalTicketCount + 1,
+  columns: old.columns.map((col) => {
+    if (col.id !== columnId) return col;
+    const tickets = [...col.tickets, ticket].sort(
+      (a, b) => a.position - b.position,
+    );
+    return { ...col, tickets };
+  }),
+});
+
+const defaultFilters: BoardFilters = {
+  query: "",
+  assignee: "all",
+  priority: "all",
+  type: "all",
+};
+
+const useBoardPage = () => {
+  const queryClient = useQueryClient();
+  const { activeProject, projectMembers } = useProject();
+
+  const [filters, setFilters] = useState<BoardFilters>(defaultFilters);
+
+  const filterForm = useAppForm({
+    defaultValues: defaultFilters,
+    listeners: {
+      onChange: ({ formApi }) => {
+        setFilters({ ...formApi.state.values });
+      },
+    },
+  });
+
+  const boardQueryKey = ["project-board", activeProject?.id] as const;
 
   const {
     data: boardData,
     isPending: isBoardLoading,
     isError: isBoardError,
   } = useQuery({
-    queryKey: ["project-board", activeProject?.id],
+    queryKey: boardQueryKey,
     queryFn: () => getProjectBoard(activeProject!.id),
     enabled: !!activeProject?.id,
   });
 
-  const columnIdByStatus = useMemo(
-    () => (boardData ? buildColumnIdByStatus(boardData.columns) : null),
+  const columnIds = useMemo(
+    () => (boardData ? getColumnIds(boardData.columns) : []),
     [boardData],
   );
 
-  useEffect(() => {
-    columnIdByStatusRef.current = columnIdByStatus;
-  }, [columnIdByStatus]);
+  const totalCount = boardData?.totalTicketCount ?? 0;
 
-  useEffect(() => {
-    if (!boardData) return;
+  // Resolve the "Todo" column ID from already-fetched board data.
+  // No column name is passed from the page — this hook owns that decision.
+  const defaultColumnId = useMemo(() => {
+    if (!boardData?.columns.length) return "";
 
-    setTicketsByColumn(
-      groupTicketsByStatus(boardData.tickets.map(mapApiTicketToBoardTicket)),
+    return (
+      boardData.columns.find((col) => col.name === "Todo")?.id ??
+      boardData.columns[0].id
     );
   }, [boardData]);
 
-  const createTicketForm = useAppForm({
-    defaultValues: {
-      type: "Story" as TicketType,
-      priority: "Medium" as TicketPriority,
-      title: "",
-      description: "",
-      assigneeId: "unassigned",
-      storyPoints: "",
-      labels: [] as string[],
-    },
-    validators: {
-      onSubmit: createTicketFormSchema,
-    },
-    onSubmit: async ({ value }) => {
-      if (!activeProject) {
-        toast.error("Select a project first");
-        return;
+  const boardDataRef = useRef(boardData);
+  const columnIdsRef = useRef(columnIds);
+
+  const [dndBoard, setDndBoardState] = useState<TicketsByColumn | null>(null);
+  const dndBoardRef = useRef<TicketsByColumn | null>(null);
+  const dragSnapshotRef = useRef<TicketsByColumn | null>(null);
+
+  const setDndBoard = (value: TicketsByColumn | null) => {
+    dndBoardRef.current = value;
+    setDndBoardState(value);
+  };
+
+  const repositionMutation = useMutation({
+    mutationFn: (vars: { ticketId: string; result: RepositionResult }) =>
+      repositionTicket(activeProject!.id, vars.ticketId, {
+        columnId: vars.result.columnId,
+        position: vars.result.position,
+      }),
+
+    onMutate: (vars) => {
+      queryClient.cancelQueries({ queryKey: boardQueryKey });
+
+      const snapshot =
+        queryClient.getQueryData<ProjectBoardResponse>(boardQueryKey);
+
+      if (snapshot) {
+        queryClient.setQueryData<ProjectBoardResponse>(
+          boardQueryKey,
+          (old) => old && optimisticReposition(old, vars.ticketId, vars.result),
+        );
       }
 
-      setIsSubmittingCreateTicket(true);
+      return { snapshot };
+    },
 
-      try {
-        const assigneeId =
-          value.assigneeId === "unassigned"
-            ? null
-            : isUuid(value.assigneeId)
-              ? value.assigneeId
-              : null;
-
-        const created = await createTicket({
-          projectId: activeProject.id,
-          columnName: defaultCreateTicketStatus,
-          title: value.title.trim(),
-          ...(value.description.trim() && {
-            description: value.description.trim(),
-          }),
-          priority: PRIORITY_TO_API[value.priority],
-          type: TYPE_TO_API[value.type],
-          assigneeId,
-          storyPoints: value.storyPoints.trim()
-            ? Number(value.storyPoints)
-            : null,
-          labels: value.labels,
-        });
-
-        const boardTicket = mapApiTicketToBoardTicket(created);
-
-        setTicketsByColumn((current) =>
-          applyBoardTicketUpdate(current, boardTicket),
-        );
-
-        toast.success(`Created ${boardTicket.key}`, {
-          description: boardTicket.title,
-        });
-
-        setIsCreateTicketOpen(false);
-        createTicketForm.reset();
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to create ticket",
-        );
-      } finally {
-        setIsSubmittingCreateTicket(false);
+    onError: (error, _, ctx) => {
+      if (ctx?.snapshot) {
+        queryClient.setQueryData(boardQueryKey, ctx.snapshot);
       }
+      toast.error(
+        error instanceof Error ? error.message : "Failed to move ticket",
+      );
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: boardQueryKey });
     },
   });
 
-  const handleTicketReposition = useCallback(
-    async (
-      ticketId: string,
-      snapshot: TicketsByColumn,
-      current: TicketsByColumn,
-    ) => {
-      const columnMap = columnIdByStatusRef.current;
-      if (!columnMap) return;
+  const repositionMutationRef = useRef(repositionMutation);
 
-      const before = findTicketLocation(snapshot, ticketId);
-      const after = findTicketLocation(current, ticketId);
+  useEffect(() => {
+    boardDataRef.current = boardData;
+    columnIdsRef.current = columnIds;
+    repositionMutationRef.current = repositionMutation;
+  }, [boardData, columnIds, repositionMutation]);
 
-      if (
-        before &&
-        after &&
-        before.status === after.status &&
-        before.index === after.index
-      ) {
-        return;
-      }
-
-      const payload = computeRepositionPayload(current, columnMap, ticketId);
-      if (!payload || !activeProject) return;
-
-      try {
-        const updated = await repositionTicket(
-          activeProject.id,
-          ticketId,
-          payload,
-        );
-        const boardTicket = mapApiTicketToBoardTicket(updated);
-
-        setTicketsByColumn((prev) => applyBoardTicketUpdate(prev, boardTicket));
-      } catch (error) {
-        setTicketsByColumn(snapshot);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to move ticket",
-        );
-      }
+  const {
+    form: createTicketForm,
+    isOpen: isCreateTicketOpen,
+    isSubmitting: isSubmittingCreateTicket,
+    open: openCreateTicketDialog,
+    close: closeCreateTicketDialog,
+  } = useCreateTicket({
+    columnId: defaultColumnId,
+    onCreated: (ticket) => {
+      queryClient.cancelQueries({ queryKey: boardQueryKey });
+      queryClient.setQueryData<ProjectBoardResponse>(
+        boardQueryKey,
+        (old) => old && optimisticCreate(old, ticket, ticket.columnId),
+      );
     },
-    [activeProject],
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: boardQueryKey });
+    },
+  });
+
+  const dndHandlers = useMemo(
+    () => ({
+      onDragStart: () => {
+        const data = boardDataRef.current;
+        if (!data) return;
+
+        const current = toTicketsByColumn(data.columns);
+        dragSnapshotRef.current = current;
+        setDndBoard(current);
+      },
+
+      onDragOver: (event: DragOverEvent) => {
+        const prev = dndBoardRef.current;
+        if (!prev) return;
+        const next = move(prev, event) as TicketsByColumn;
+        dndBoardRef.current = next;
+        setDndBoardState(next);
+      },
+
+      onDragEnd: (event: DragEndEvent) => {
+        if (event.canceled) {
+          setDndBoard(null);
+          dragSnapshotRef.current = null;
+          return;
+        }
+
+        const finalBoard = dndBoardRef.current;
+        const ticketId = String(event.operation.source?.id ?? "");
+
+        if (ticketId && finalBoard) {
+          const data = boardDataRef.current;
+          const before = findTicketLocation(
+            dragSnapshotRef.current ??
+              (data ? toTicketsByColumn(data.columns) : {}),
+            columnIdsRef.current,
+            ticketId,
+          );
+          const after = findTicketLocation(
+            finalBoard,
+            columnIdsRef.current,
+            ticketId,
+          );
+
+          const noOp =
+            before &&
+            after &&
+            before.columnId === after.columnId &&
+            before.index === after.index;
+
+          if (!noOp) {
+            const result = computeRepositionPayload(
+              finalBoard,
+              columnIdsRef.current,
+              ticketId,
+            );
+
+            if (result) {
+              repositionMutationRef.current.mutate({ ticketId, result });
+            }
+          }
+        }
+
+        setDndBoard(null);
+        dragSnapshotRef.current = null;
+      },
+    }),
+    [],
   );
 
   const columns = useMemo<BoardColumnData[]>(() => {
-    const filterParams = { query, assignee, priority, type };
-    return BOARD_COLUMNS.map((status) => {
-      const allInColumn = ticketsByColumn[status] ?? [];
+    if (!boardData) return [];
+
+    return boardData.columns.map((column) => {
+      const allInColumn = dndBoard?.[column.id] ?? column.tickets;
       const items = allInColumn.reduce<BoardColumnData["items"]>(
         (acc, ticket, dndIndex) => {
-          if (matchesFilter(ticket, filterParams)) {
+          if (matchesFilter(ticket, filters)) {
             acc.push({ ticket, dndIndex });
           }
           return acc;
@@ -291,67 +339,48 @@ const useBoardPage = ({
       );
 
       return {
-        status,
-        label: STATUS_META[status].label,
-        dotClassName: STATUS_META[status].dot,
+        id: column.id,
+        name: column.name,
+        color: column.color,
         items,
       };
     });
-  }, [ticketsByColumn, query, assignee, priority, type]);
+  }, [boardData, dndBoard, filters]);
 
   const filteredCount = useMemo(
     () => columns.reduce((sum, col) => sum + col.items.length, 0),
     [columns],
   );
 
-  const totalCount = useMemo(
-    () =>
-      Object.values(ticketsByColumn).reduce(
-        (sum, tickets) => sum + tickets.length,
-        0,
-      ),
-    [ticketsByColumn],
-  );
-
   const activeFilterCount =
-    (assignee !== "all" ? 1 : 0) +
-    (priority !== "all" ? 1 : 0) +
-    (type !== "all" ? 1 : 0);
+    (filters.assignee !== "all" ? 1 : 0) +
+    (filters.priority !== "all" ? 1 : 0) +
+    (filters.type !== "all" ? 1 : 0);
 
-  const clearFilters = () => {
-    setAssignee("all");
-    setPriority("all");
-    setType("all");
-    setQuery("");
-  };
+  const clearFilters = useCallback(() => {
+    filterForm.reset();
+    setFilters(defaultFilters);
+  }, [filterForm]);
 
-  const toggleAssigneeFilter = (memberId: string) => {
-    setAssignee((current) => (current === memberId ? "all" : memberId));
-  };
-
-  const openCreateTicketDialog = useCallback(() => {
-    createTicketForm.reset();
-    setIsCreateTicketOpen(true);
-  }, [createTicketForm]);
-
-  const closeCreateTicketDialog = useCallback(() => {
-    setIsCreateTicketOpen(false);
-    createTicketForm.reset();
-  }, [createTicketForm]);
+  const toggleAssigneeFilter = useCallback(
+    (memberId: string) => {
+      const current = filterForm.getFieldValue("assignee");
+      filterForm.setFieldValue(
+        "assignee",
+        current === memberId ? "all" : memberId,
+      );
+    },
+    [filterForm],
+  );
 
   return {
     state: {
-      query,
-      assignee,
-      priority,
-      type,
-      members: MEMBERS,
+      filterForm,
+      members: projectMembers ?? [],
       filteredCount,
       totalCount,
       activeFilterCount,
       columns,
-      ticketsByColumn,
-      snapshotRef,
       isCreateTicketOpen,
       isSubmittingCreateTicket,
       createTicketForm,
@@ -360,16 +389,11 @@ const useBoardPage = ({
       isBoardError,
     },
     actions: {
-      setQuery,
-      setAssignee,
-      setPriority,
-      setType,
       clearFilters,
       toggleAssigneeFilter,
-      setTicketsByColumn,
       openCreateTicketDialog,
       closeCreateTicketDialog,
-      handleTicketReposition,
+      dndHandlers,
     },
   };
 };

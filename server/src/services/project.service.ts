@@ -8,7 +8,10 @@ export const normalizeProjectName = (name: string) => name.toLowerCase();
 export const DUPLICATE_PROJECT_NAME_MESSAGE =
   "A project with this name already exists in your organization";
 
-export const isDuplicateProjectNameError = (error: unknown) =>
+export const DUPLICATE_LABEL_NAME_MESSAGE =
+  "A label with this name already exists in this project";
+
+export const isDuplicateNameError = (error: unknown) =>
   error instanceof PrismaClientKnownRequestError && error.code === "P2002";
 
 export const canCreateOrgProjects = (role: string | null | undefined) =>

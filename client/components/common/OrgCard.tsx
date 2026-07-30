@@ -1,7 +1,7 @@
 import { FolderKanban, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Organization } from "@/features/(onboarding)/types";
-import { getOrgColor } from "@/features/(onboarding)/lib/orgUtils";
+import { getColor } from "@/lib/utils/common";
 
 type Props = {
   org: Organization;
@@ -16,7 +16,7 @@ export function OrgCard({
   onAction,
   isLoading = false,
 }: Props) {
-  const color = getOrgColor(org.orgName);
+  const color = getColor(org.orgName);
   const initials = org.orgName
     .split(" ")
     .map((word: string) => word[0])

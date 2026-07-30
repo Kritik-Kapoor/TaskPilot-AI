@@ -2,13 +2,13 @@
 
 import { getUserRoleInProject } from "@/features/(auth)/api";
 import type { ProjectRole } from "@/features/(auth)/types";
-import { getProjects } from "@/features/(workspace)/api";
+import { getProjectLabels, getProjectMembers, getProjects } from "@/features/(workspace)/api";
 import {
   getProjectIdFromParams,
   PROJECT_ID_PARAM,
   withProjectId,
 } from "@/features/(workspace)/lib/projectUrl";
-import type { Project } from "@/features/(workspace)/types";
+import type { Project, ProjectLabel, ProjectMember } from "@/features/(workspace)/types";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -19,18 +19,26 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
+import { ProjectProviderFatalError } from "../components/common/ProjectProviderFeedback";
 
 const PROJECT_ROLES: ProjectRole[] = ["ADMIN", "MEMBER", "VIEWER"];
 
 type ProjectContextType = {
   projects: Project[];
   activeProject: Project | null;
+  projectMembers: ProjectMember[] | undefined;
+  projectLabels: ProjectLabel[];
   projectRole: ProjectRole;
   isProjectAdmin: boolean;
   buildWorkspacePath: (path: string) => string;
   handleSetActiveProjectId: (projectId: string) => void;
   isLoading: boolean;
   isRoleLoading: boolean;
+  isMembersLoading: boolean;
+  isLabelsLoading: boolean;
+  showRoleWarning: boolean;
+  retryProjectRole: () => void;
+  isProjectRoleRetrying: boolean;
 };
 
 const isValidProjectRole = (value: unknown): value is ProjectRole =>
@@ -44,7 +52,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const urlProjectId = getProjectIdFromParams(searchParams);
 
-  const { data: projects = [], isPending: isProjectsPending } = useQuery({
+  const {
+    data: projects = [],
+    isPending: isProjectsPending,
+    isError: isProjectsError,
+    isFetching: isProjectsFetching,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ["projects"],
     queryFn: getProjects,
   });
@@ -76,16 +90,37 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [activeProject]);
 
   const {
+    data: projectMembers,
+    isPending: isProjectMembersPending,
+    isError: isProjectMembersError,
+    isFetching: isProjectMembersFetching,
+    refetch: refetchProjectMembers,
+  } = useQuery({
+    queryKey: ["project-members", resolvedProjectId],
+    queryFn: () => getProjectMembers(resolvedProjectId!),
+    enabled: !!resolvedProjectId,
+  });
+
+  const {
+    data: projectLabels = [],
+    isPending: isProjectLabelsPending,
+  } = useQuery({
+    queryKey: ["project-labels", resolvedProjectId],
+    queryFn: () => getProjectLabels(resolvedProjectId!),
+    enabled: !!resolvedProjectId,
+  });
+
+  const {
     data: projectRole = placeholderRole,
     isPending: isProjectRolePending,
+    isError: isProjectRoleError,
     isFetching: isProjectRoleFetching,
+    refetch: refetchProjectRole,
   } = useQuery({
     queryKey: ["project-role", resolvedProjectId],
     queryFn: () => getUserRoleInProject(resolvedProjectId!),
     enabled: !!resolvedProjectId,
     placeholderData: placeholderRole,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
   });
 
   useEffect(() => {
@@ -121,30 +156,71 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     [resolvedProjectId],
   );
 
+  const hasCriticalError = isProjectsError || isProjectMembersError;
+
+  const showRoleWarning =
+    !hasCriticalError && !!resolvedProjectId && isProjectRoleError;
+
+  const effectiveProjectRole = showRoleWarning ? "VIEWER" : projectRole;
+
   const value = useMemo(
     () => ({
       projects,
       activeProject,
-      projectRole,
-      isProjectAdmin: projectRole === "ADMIN",
+      projectMembers,
+      projectLabels,
+      projectRole: effectiveProjectRole,
+      isProjectAdmin: effectiveProjectRole === "ADMIN",
       buildWorkspacePath,
       handleSetActiveProjectId,
       isLoading: isProjectsPending,
-      isRoleLoading:
-        !!resolvedProjectId && (isProjectRolePending || isProjectRoleFetching),
+      isRoleLoading: !!resolvedProjectId && isProjectRolePending,
+      isMembersLoading: !!resolvedProjectId && isProjectMembersPending,
+      isLabelsLoading: !!resolvedProjectId && isProjectLabelsPending,
+      showRoleWarning,
+      retryProjectRole: refetchProjectRole,
+      isProjectRoleRetrying: isProjectRoleFetching,
     }),
     [
       activeProject,
       buildWorkspacePath,
+      effectiveProjectRole,
       handleSetActiveProjectId,
+      isProjectLabelsPending,
+      isProjectMembersPending,
       isProjectRoleFetching,
       isProjectRolePending,
       isProjectsPending,
-      projectRole,
+      projectLabels,
+      projectMembers,
       projects,
       resolvedProjectId,
+      showRoleWarning,
+      refetchProjectRole,
     ],
   );
+
+  if (isProjectsError) {
+    return (
+      <ProjectProviderFatalError
+        title="Couldn't load projects"
+        description="We couldn't fetch your workspace projects. Check your connection and try again."
+        onRetry={() => void refetchProjects()}
+        isRetrying={isProjectsFetching}
+      />
+    );
+  }
+
+  if (isProjectMembersError) {
+    return (
+      <ProjectProviderFatalError
+        title="Couldn't load project members"
+        description="We couldn't fetch members for this project. Check your connection and try again."
+        onRetry={() => void refetchProjectMembers()}
+        isRetrying={isProjectMembersFetching}
+      />
+    );
+  }
 
   return (
     <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>

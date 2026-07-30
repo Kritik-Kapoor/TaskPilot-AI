@@ -2,22 +2,12 @@
 
 import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  initialsOf,
-  type TicketPriority,
-  type TicketType,
-} from "@/features/(onboarding)/lib/mock-app";
+import { SelectItem } from "@/components/ui/select";
+import { FormInputGroup } from "@/components/common/form/FormInputGroup";
 import { cn } from "@/lib/utils";
-import { BOARD_PRIORITIES, BOARD_TYPES } from "../constants";
+import { BOARD_PRIORITIES, BOARD_TYPES } from "../lib/constants";
 import type useBoardPage from "../hooks/useBoardPage";
+import { initialsOf, getColor } from "@/lib/utils/common";
 
 type BoardToolbarProps = {
   state: ReturnType<typeof useBoardPage>["state"];
@@ -25,25 +15,10 @@ type BoardToolbarProps = {
 };
 
 const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
-  const {
-    query,
-    assignee,
-    priority,
-    type,
-    members,
-    filteredCount,
-    totalCount,
-    activeFilterCount,
-  } = state;
+  const { filterForm, members, filteredCount, totalCount, activeFilterCount } =
+    state;
 
-  const {
-    setQuery,
-    setAssignee,
-    setPriority,
-    setType,
-    clearFilters,
-    toggleAssigneeFilter,
-  } = actions;
+  const { clearFilters, toggleAssigneeFilter } = actions;
 
   return (
     <div className="shrink-0 space-y-3 border-b border-border bg-background pb-4">
@@ -51,15 +26,14 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Board</h1>
           <p className="text-xs text-muted-foreground">
-            Sprint 24 · {filteredCount} of {totalCount} tickets
+            {filteredCount} of {totalCount} tickets
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline">
             <SlidersHorizontal className="h-4 w-4" /> Group by
           </Button>
           <Button
-            size="sm"
             className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
             onClick={actions.openCreateTicketDialog}
           >
@@ -69,64 +43,75 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tickets…"
-            className="h-9 w-64 pl-8"
-          />
-        </div>
+        <filterForm.AppField name="query">
+          {(field) => (
+            <field.InputGroup
+              hideLabel
+              label="Search"
+              placeholder="Search tickets…"
+              groupClasses="h-9 w-64"
+            >
+              <FormInputGroup.Addon>
+                <Search className="h-4 w-4 text-muted-foreground" />
+              </FormInputGroup.Addon>
+            </field.InputGroup>
+          )}
+        </filterForm.AppField>
 
-        <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="h-9 w-40">
-            <SelectValue placeholder="Assignee" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
-            {members.map((member) => (
-              <SelectItem key={member.id} value={member.id}>
-                {member.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <filterForm.AppField name="assignee">
+          {(field) => (
+            <field.Select
+              hideLabel
+              label="Assignee"
+              placeholder="Assignee"
+              controlClassName="h-9 w-40"
+            >
+              <SelectItem value="all">All assignees</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {members.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.username}
+                </SelectItem>
+              ))}
+            </field.Select>
+          )}
+        </filterForm.AppField>
 
-        <Select
-          value={priority}
-          onValueChange={(value) => setPriority(value as TicketPriority | "all")}
-        >
-          <SelectTrigger className="h-9 w-35">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any priority</SelectItem>
-            {BOARD_PRIORITIES.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <filterForm.AppField name="priority">
+          {(field) => (
+            <field.Select
+              hideLabel
+              label="Priority"
+              placeholder="Priority"
+              controlClassName="h-9 w-35"
+            >
+              <SelectItem value="all">Any priority</SelectItem>
+              {BOARD_PRIORITIES.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </field.Select>
+          )}
+        </filterForm.AppField>
 
-        <Select
-          value={type}
-          onValueChange={(value) => setType(value as TicketType | "all")}
-        >
-          <SelectTrigger className="h-9 w-32.5">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any type</SelectItem>
-            {BOARD_TYPES.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <filterForm.AppField name="type">
+          {(field) => (
+            <field.Select
+              hideLabel
+              label="Type"
+              placeholder="Type"
+              controlClassName="h-9 w-32.5"
+            >
+              <SelectItem value="all">Any type</SelectItem>
+              {BOARD_TYPES.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </field.Select>
+          )}
+        </filterForm.AppField>
 
         {activeFilterCount > 0 && (
           <Button
@@ -139,23 +124,27 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
           </Button>
         )}
 
-        <div className="ml-auto flex -space-x-2">
-          {members.slice(0, 5).map((member) => (
-            <button
-              key={member.id}
-              type="button"
-              onClick={() => toggleAssigneeFilter(member.id)}
-              className={cn(
-                "grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white ring-2 ring-background transition-transform hover:-translate-y-0.5",
-                assignee === member.id && "ring-brand",
-              )}
-              style={{ background: member.avatarColor }}
-              title={member.name}
-            >
-              {initialsOf(member.name)}
-            </button>
-          ))}
-        </div>
+        <filterForm.Subscribe selector={(state) => state.values.assignee}>
+          {(assignee) => (
+            <div className="ml-auto flex -space-x-2">
+              {members.slice(0, 5).map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => toggleAssigneeFilter(member.id)}
+                  className={cn(
+                    "grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white ring-2 ring-background transition-transform hover:-translate-y-0.5",
+                    assignee === member.id && "ring-brand",
+                  )}
+                  style={{ background: getColor(member.username) }}
+                  title={member.username}
+                >
+                  {initialsOf(member.username)}
+                </button>
+              ))}
+            </div>
+          )}
+        </filterForm.Subscribe>
       </div>
     </div>
   );

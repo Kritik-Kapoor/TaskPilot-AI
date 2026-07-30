@@ -8,6 +8,8 @@ import authRoutes from "./routes/auth.route.js";
 import organizationRoutes from "./routes/organization.route.js";
 import projectRoutes from "./routes/project.route.js";
 import ticketRoutes from "./routes/ticket.route.js";
+import helmet from "helmet";
+import { authenticateWorkspaceUser } from "./middlewares/authenticateWorkspaceUser.middleware.js";
 
 dotenv.config();
 
@@ -20,11 +22,14 @@ connectDB();
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 // Middleware
 app.use(cors(corsOptions));
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Routes
 app.use("/health", (_req, res) => {
@@ -32,8 +37,8 @@ app.use("/health", (_req, res) => {
 });
 app.use("/auth", authRoutes);
 app.use("/organization", organizationRoutes);
-app.use("/project", projectRoutes);
-app.use("/ticket", ticketRoutes);
+app.use("/project", authenticateWorkspaceUser, projectRoutes);
+app.use("/ticket", authenticateWorkspaceUser, ticketRoutes);
 
 app.listen(3001, () => {
   console.log("Server is running on port 3001");

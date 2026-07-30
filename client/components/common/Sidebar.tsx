@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Inbox,
-  Kanban,
   LayoutDashboard,
   List,
   Settings,
+  SquareKanban,
   UserCog,
   UserPlus,
   Users,
@@ -30,7 +30,7 @@ import {
 
 const WORKSPACE_NAV = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Board", href: "/board", icon: Kanban },
+  { title: "Board", href: "/board", icon: SquareKanban },
   { title: "Backlog", href: "/backlog", icon: List },
   { title: "Inbox", href: "/inbox", icon: Inbox },
   { title: "Members", href: "/members", icon: Users },

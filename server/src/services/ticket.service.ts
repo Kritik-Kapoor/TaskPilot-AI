@@ -9,6 +9,7 @@ import {
   getPositionBetween,
   TICKET_POSITION_GAP,
 } from "../utils/ticketPosition.utils.js";
+import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
 import type { Prisma } from "../generated/prisma/client.js";
 
 export class TicketServiceError extends Error {
@@ -20,7 +21,7 @@ export class TicketServiceError extends Error {
   }
 }
 
-const ticketSelect = {
+const ticketBaseSelect = {
   id: true,
   ticketKey: true,
   title: true,
@@ -28,7 +29,6 @@ const ticketSelect = {
   priority: true,
   type: true,
   position: true,
-  labels: true,
   storyPoints: true,
   columnId: true,
   projectId: true,
@@ -42,6 +42,19 @@ const ticketSelect = {
       username: true,
     },
   },
+  labels: {
+    select: {
+      id: true,
+      name: true,
+      color: true,
+    },
+  },
+} satisfies Prisma.TicketSelect;
+
+// Full select includes the column relation — used for single-ticket responses
+// where the caller doesn't have column context from a parent query.
+const ticketSelect = {
+  ...ticketBaseSelect,
   column: {
     select: {
       id: true,
@@ -250,11 +263,15 @@ export const createTicket = async (
         type: input.type ?? "TASK",
         assigneeId: input.assigneeId ?? null,
         storyPoints: input.storyPoints ?? null,
-        labels: input.labels ?? [],
         position,
         createdById: userId,
+        ...(input.labels && {
+          labels: {
+            connect: input.labels.map((label) => ({ id: label })),
+          },
+        }),
       },
-      select: ticketSelect,
+      select: ticketBaseSelect,
     });
   });
 };
@@ -266,25 +283,59 @@ export const getProjectTickets = async (
 ) => {
   await assertProjectAccess(userId, orgId, projectId);
 
-  const [columns, tickets] = await Promise.all([
+  const [columns, totalTicketCount] = await Promise.all([
     prisma.boardColumn.findMany({
-      where: { projectId },
+      where: { projectId, name: { not: BACKLOG_COLUMN_NAME } },
       orderBy: { position: "asc" },
       select: {
         id: true,
         name: true,
         color: true,
         position: true,
+        tickets: {
+          orderBy: { position: "asc" },
+          select: ticketBaseSelect,
+        },
       },
     }),
-    prisma.ticket.findMany({
-      where: { projectId },
-      orderBy: [{ column: { position: "asc" } }, { position: "asc" }],
-      select: ticketSelect,
+    prisma.ticket.count({
+      where: {
+        projectId,
+        column: { name: { not: BACKLOG_COLUMN_NAME } },
+      },
     }),
   ]);
 
-  return { columns, tickets };
+  return { columns, totalTicketCount };
+};
+
+export const getProjectBacklogTickets = async (
+  orgId: string,
+  userId: string,
+  projectId: string,
+) => {
+  await assertProjectAccess(userId, orgId, projectId);
+
+  const backlogColumn = await prisma.boardColumn.findFirst({
+    where: { projectId, name: BACKLOG_COLUMN_NAME },
+    select: { id: true, name: true, color: true },
+  });
+
+  if (!backlogColumn) {
+    return { column: null, tickets: [], totalTicketCount: 0 };
+  }
+
+  const tickets = await prisma.ticket.findMany({
+    where: { projectId, columnId: backlogColumn.id },
+    orderBy: { position: "asc" },
+    select: ticketBaseSelect,
+  });
+
+  return {
+    column: backlogColumn,
+    tickets,
+    totalTicketCount: tickets.length,
+  };
 };
 
 export const getTicketById = async (
@@ -398,11 +449,15 @@ export const updateTicket = async (
         ...(input.storyPoints !== undefined && {
           storyPoints: input.storyPoints,
         }),
-        ...(input.labels !== undefined && { labels: input.labels }),
+        ...(input.labels !== undefined && {
+          labels: {
+            connect: input.labels.map((label) => ({ id: label })),
+          },
+        }),
         ...(isMovingColumn && { columnId: targetColumnId }),
         ...(isMovingColumn || isUpdatingPosition ? { position } : {}),
       },
-      select: ticketSelect,
+      select: ticketBaseSelect,
     });
   });
 };

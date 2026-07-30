@@ -6,8 +6,10 @@ import {
 } from "../utils/apiResponse.js";
 import { prisma } from "../config/db.js";
 import type {
+  CreateLabelBody,
   CreateProjectInput,
   ProjectIdParams,
+  UpdateLabelParams,
   UpdateProjectInput,
   UpdateProjectMemberBody,
   UpdateProjectMemberParams,
@@ -16,12 +18,13 @@ import {
   canCreateOrgProjects,
   canUpdateProjectDetails,
   createProjectWithMembership,
+  DUPLICATE_LABEL_NAME_MESSAGE,
   DUPLICATE_PROJECT_NAME_MESSAGE,
   findConflictingProject,
   findProjectInOrg,
   getOrgMember,
   getProjectMembership,
-  isDuplicateProjectNameError,
+  isDuplicateNameError,
   updateProjectDetails,
 } from "../services/project.service.js";
 import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
@@ -64,7 +67,7 @@ export const createProject = async (req: Request, res: Response) => {
       "Project created successfully",
     ).send(res);
   } catch (error) {
-    if (isDuplicateProjectNameError(error)) {
+    if (isDuplicateNameError(error)) {
       return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
         res,
       );
@@ -203,7 +206,7 @@ export const updateProject = async (req: Request, res: Response) => {
       res,
     );
   } catch (error) {
-    if (isDuplicateProjectNameError(error)) {
+    if (isDuplicateNameError(error)) {
       return new ApiResponse(409, null, DUPLICATE_PROJECT_NAME_MESSAGE).send(
         res,
       );
@@ -403,6 +406,154 @@ export const getUserRoleInProject = async (req: Request, res: Response) => {
       projectMember.role,
       "User role fetched successfully",
     ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getProjectMembers = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.validated!.params as ProjectIdParams;
+
+    const projectMembers = await prisma.projectMember.findMany({
+      where: { projectId },
+      select: {
+        role: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    const members = projectMembers.map(({ role, user }) => ({
+      role,
+      id: user.id,
+      username: user.username,
+    }));
+
+    return new ApiResponse(
+      200,
+      members,
+      "Project members fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getProjectBoardColumns = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.validated!.params as ProjectIdParams;
+
+    const boardColumns = await prisma.boardColumn.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        position: true,
+      },
+      orderBy: {
+        position: "asc",
+      },
+    });
+
+    return new ApiResponse(
+      200,
+      boardColumns,
+      "Project board columns fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const createLabel = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+    const { projectId } = req.validated!.params as ProjectIdParams;
+    const { name, color } = req.validated!.body as CreateLabelBody;
+
+    const memberAccess = await getProjectMembership(userId, projectId);
+
+    if (memberAccess?.role === "VIEWER") {
+      return new ApiResponse(
+        403,
+        null,
+        "You are not authorized to create labels in this project",
+      ).send(res);
+    }
+
+    const newLabel = await prisma.label.create({
+      data: {
+        name,
+        color,
+        projectId,
+      },
+    });
+
+    return new ApiResponse(200, newLabel, "Label created successfully").send(
+      res,
+    );
+  } catch (error) {
+    if (isDuplicateNameError(error)) {
+      return new ApiResponse(409, null, DUPLICATE_LABEL_NAME_MESSAGE).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const updateLabel = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+    const { projectId, labelId } = req.validated!.params as UpdateLabelParams;
+    const body = req.validated!.body as CreateLabelBody;
+
+    const memberAccess = await getProjectMembership(userId, projectId);
+
+    if (memberAccess?.role === "VIEWER") {
+      return new ApiResponse(
+        403,
+        null,
+        "You are not authorized to update labels in this project",
+      ).send(res);
+    }
+
+    const updatedLabel = await prisma.label.update({
+      where: { id: labelId, projectId },
+      data: body,
+    });
+
+    return new ApiResponse(
+      200,
+      updatedLabel,
+      "Label updated successfully",
+    ).send(res);
+  } catch (error) {
+    if (isDuplicateNameError(error)) {
+      return new ApiResponse(409, null, DUPLICATE_LABEL_NAME_MESSAGE).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getLabels = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.validated!.params as ProjectIdParams;
+
+    const labels = await prisma.label.findMany({
+      where: { projectId },
+      select: { id: true, name: true, color: true },
+    });
+
+    return new ApiResponse(200, labels, "Labels fetched successfully").send(
+      res,
+    );
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

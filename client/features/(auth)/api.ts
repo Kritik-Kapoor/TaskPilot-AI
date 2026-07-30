@@ -17,13 +17,11 @@ export const registerUser = (data: RegisterInputs) =>
 
 export const getCurrentUser = () =>
   apiFetch<User>("/auth/user", {
-    method: "GET",
     fallbackErrorMessage: "Failed to fetch current user",
   });
 
 export const getUserRoleInProject = (projectId: string) =>
   apiFetch<ProjectRole>(`/project/${projectId}/role`, {
-    method: "GET",
     fallbackErrorMessage: "Failed to fetch project role",
   });
 

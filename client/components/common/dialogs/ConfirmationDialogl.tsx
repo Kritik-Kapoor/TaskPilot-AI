@@ -34,7 +34,7 @@ const ConfirmationDialog = ({
 }: ConfirmationDialogProps) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-11/12 sm:max-w-[425px]">
+      <DialogContent className="w-11/12 sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle className="mb-2">{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

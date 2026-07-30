@@ -1,6 +1,7 @@
 import { useFieldContext } from "./formContext";
 import { FormBase, FormControlProps } from "./FormBase";
 import { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -11,6 +12,7 @@ import {
 export function FormSelect({
   children,
   placeholder,
+  controlClassName,
   ...props
 }: FormControlProps & { children: ReactNode }) {
   const field = useFieldContext<string>();
@@ -26,6 +28,7 @@ export function FormSelect({
           aria-invalid={isInvalid}
           id={field.name}
           onBlur={field.handleBlur}
+          className={cn(controlClassName)}
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>

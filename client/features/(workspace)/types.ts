@@ -6,3 +6,15 @@ export type Project = {
   isJoined: boolean;
   role: string | null;
 };
+
+export type ProjectMember = {
+  role: string;
+  id: string;
+  username: string;
+};
+
+export type ProjectLabel = {
+  id: string;
+  name: string;
+  color: string;
+};

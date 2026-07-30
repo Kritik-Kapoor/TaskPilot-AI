@@ -5,6 +5,7 @@ import { FormInputGroup } from "./FormInputGroup";
 import { FormSelect } from "./FormSelect";
 import { FormTextarea } from "./FormTextarea";
 import { FormCheckbox } from "./FormCheckbox";
+import { FormMultiSelect } from "./FormMultiSelect";
 
 const { useAppForm } = createFormHook({
   fieldComponents: {
@@ -13,6 +14,7 @@ const { useAppForm } = createFormHook({
     Textarea: FormTextarea,
     Select: FormSelect,
     Checkbox: FormCheckbox,
+    MultiSelect: FormMultiSelect,
   },
   formComponents: {},
   fieldContext,

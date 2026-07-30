@@ -38,7 +38,7 @@ const FormDialog = ({
       }}
     >
       <DialogContent
-        className={cn("sm:max-w-[425px] md:max-w-125", className)}
+        className={cn("sm:max-w-106.25 md:max-w-125", className)}
         overlayClassName={overlayClassName}
         style={style}
         onPointerDownOutside={

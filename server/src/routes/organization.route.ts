@@ -31,39 +31,48 @@ router.post(
   validate(createOrganizationSchema),
   createOrganization,
 );
-router.get("/", authenticateWorkspaceUser, getOrganization);
-router.delete("/", authenticateWorkspaceUser, deleteOrganization);
-router.patch(
-  "/",
-  authenticateWorkspaceUser,
-  validate(updateOrganizationSchema),
-  updateOrganization,
-);
-router.post(
-  "/transfer-ownership/:newOwnerId",
-  authenticateWorkspaceUser,
-  validate(transferOwnershipParamsSchema, "params"),
-  transferOwnership,
-);
-router.get("/projects", authenticateWorkspaceUser, getProjectsList);
+
 router.get(
   "/search",
   authenticateUser,
   validate(searchOrganizationsQuerySchema, "query"),
   searchOrganizations,
 );
+
 router.get(
   "/check",
   authenticateUser,
   validate(checkOrganizationNameQuerySchema, "query"),
   checkOrganizationName,
 );
+
 router.get("/join-requests", authenticateUser, getMyJoinRequests);
+
 router.post(
   "/join-request/:orgId",
   authenticateUser,
   validate(organizationIdParamsSchema, "params"),
   joinRequest,
 );
+
+router.get("/", authenticateWorkspaceUser, getOrganization);
+
+router.delete("/", authenticateWorkspaceUser, deleteOrganization);
+
+router.patch(
+  "/",
+  authenticateWorkspaceUser,
+  validate(updateOrganizationSchema),
+  updateOrganization,
+);
+
+router.post(
+  "/transfer-ownership/:newOwnerId",
+  authenticateWorkspaceUser,
+  validate(transferOwnershipParamsSchema, "params"),
+  transferOwnership,
+);
+
+router.get("/projects", authenticateWorkspaceUser, getProjectsList);
 
 export default router;

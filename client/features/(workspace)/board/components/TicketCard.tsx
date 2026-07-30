@@ -1,39 +1,31 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Badge } from "@/components/ui/badge";
-import {
-  initialsOf,
-  memberById,
-  PRIORITY_META,
-  TYPE_META,
-  type Ticket,
-  type TicketStatus,
-} from "@/features/(onboarding)/lib/mock-app";
 import { cn } from "@/lib/utils";
+import { initialsOf, getColor } from "@/lib/utils/common";
+import { useProject } from "@/providers/projectProvider";
+import { PRIORITY_CLASS, TYPE_CLASS } from "../lib/constants";
+import type { Ticket } from "../types";
 
 type TicketCardProps = {
   ticket: Ticket;
-  /** Zero-based position inside this column (required by useSortable). */
   index: number;
-  /** The column this ticket belongs to — used as the dnd-kit group key. */
-  column: TicketStatus;
+  columnId: string;
 };
 
-const TicketCard = ({ ticket, index, column }: TicketCardProps) => {
+const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
+  const { projectMembers } = useProject();
+
   const { ref, isDragging } = useSortable({
     id: ticket.id,
     index,
-    // "item" distinguishes tickets from the "column" type used by useDroppable,
-    // so column droppables never accidentally accept another column as a child.
     type: "item",
     accept: "item",
-    // group tells dnd-kit which column this card lives in. Cards with different
-    // group values can be dragged between columns; the `move` helper uses this
-    // to know which key in the Record<status, Ticket[]> to update.
-    group: column,
+    group: columnId,
   });
 
-  const member = memberById(ticket.assigneeId);
-  const typeStyle = TYPE_META[ticket.type];
+  const assignee = projectMembers?.find(
+    (member) => member.id === ticket.assigneeId,
+  );
 
   return (
     <div
@@ -47,14 +39,17 @@ const TicketCard = ({ ticket, index, column }: TicketCardProps) => {
       <div className="flex items-center justify-between">
         <Badge
           variant="outline"
-          className={cn("border text-[10px]", typeStyle.className)}
+          className={cn(
+            "border text-[10px] uppercase",
+            TYPE_CLASS[ticket.type],
+          )}
         >
-          {typeStyle.label}
+          {ticket.type}
         </Badge>
         <span
           className={cn(
             "text-[10px] font-medium tracking-wider uppercase",
-            PRIORITY_META[ticket.priority].className,
+            PRIORITY_CLASS[ticket.priority],
           )}
         >
           {ticket.priority}
@@ -67,10 +62,11 @@ const TicketCard = ({ ticket, index, column }: TicketCardProps) => {
         <div className="mt-2 flex flex-wrap gap-1">
           {ticket.labels.map((label) => (
             <span
-              key={label}
-              className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              key={label.id}
+              className="rounded px-1.5 py-0.5 text-[10px] text-white"
+              style={{ backgroundColor: label.color }}
             >
-              {label}
+              {label.name}
             </span>
           ))}
         </div>
@@ -78,21 +74,21 @@ const TicketCard = ({ ticket, index, column }: TicketCardProps) => {
 
       <div className="mt-3 flex items-center justify-between">
         <span className="font-mono text-[11px] text-muted-foreground">
-          {ticket.key}
+          {ticket.ticketKey}
         </span>
         <div className="flex items-center gap-2">
-          {ticket.points && (
+          {ticket.storyPoints != null && (
             <span className="grid h-5 w-5 place-items-center rounded-full bg-muted text-[10px] font-semibold">
-              {ticket.points}
+              {ticket.storyPoints}
             </span>
           )}
-          {member ? (
+          {assignee ? (
             <div
               className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold text-white"
-              style={{ background: member.avatarColor }}
-              title={member.name}
+              style={{ background: getColor(assignee.username) }}
+              title={assignee.username}
             >
-              {initialsOf(member.name)}
+              {initialsOf(assignee.username)}
             </div>
           ) : (
             <div

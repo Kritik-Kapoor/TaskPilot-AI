@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { optionalDescriptionSchema, updateDescriptionSchema } from "./common.schema.js";
+import {
+  optionalDescriptionSchema,
+  updateDescriptionSchema,
+} from "./common.schema.js";
 
 export const projectRoleSchema = z.enum(["ADMIN", "MEMBER", "VIEWER"]);
 
@@ -45,6 +48,22 @@ export const updateProjectMemberBodySchema = z.object({
   role: projectRoleSchema.optional(),
 });
 
+export const createLabelBodySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Label name must be at least 2 characters long"),
+  color: z
+    .string()
+    .trim()
+    .min(2, "Label color must be at least 2 characters long"),
+});
+
+export const updateLabelParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  labelId: z.uuid("Invalid label ID"),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>;
@@ -54,3 +73,5 @@ export type UpdateProjectMemberParams = z.infer<
 export type UpdateProjectMemberBody = z.infer<
   typeof updateProjectMemberBodySchema
 >;
+export type CreateLabelBody = z.infer<typeof createLabelBodySchema>;
+export type UpdateLabelParams = z.infer<typeof updateLabelParamsSchema>;
