@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 import { getColor, initialsOf } from "@/lib/utils/common";
 import { ColumnDef } from "@tanstack/react-table";
 import { Circle } from "lucide-react";
+import Link from "next/link";
 import { PRIORITY_CLASS, TYPE_CLASS } from "../../board/lib/constants";
 import type { Ticket } from "../../board/types";
 import { formatTicketEnum } from "../lib/constants";
 
-export const BacklogTableColumns: ColumnDef<Ticket>[] = [
+export const createBacklogTableColumns = (
+  getTicketHref: (ticketId: string) => string,
+): ColumnDef<Ticket>[] => [
   {
     id: "select",
     header: () => null,
@@ -33,9 +36,12 @@ export const BacklogTableColumns: ColumnDef<Ticket>[] = [
     size: 80,
     maxSize: 80,
     cell: ({ row }) => (
-      <span className="font-mono text-xs text-muted-foreground">
+      <Link
+        href={getTicketHref(row.original.id)}
+        className="font-mono text-xs text-muted-foreground hover:text-foreground"
+      >
         {row.original.ticketKey}
-      </span>
+      </Link>
     ),
   },
   {
@@ -44,7 +50,14 @@ export const BacklogTableColumns: ColumnDef<Ticket>[] = [
     size: 350,
     maxSize: 350,
     cell: ({ row }) => (
-      <span className="font-medium">{row.original.title}</span>
+      <Link
+        href={getTicketHref(row.original.id)}
+        className="font-medium hover:text-brand"
+      >
+        {row.original.title.length > 65
+          ? row.original.title.slice(0, 65) + "..."
+          : row.original.title}
+      </Link>
     ),
   },
   {
@@ -97,7 +110,7 @@ export const BacklogTableColumns: ColumnDef<Ticket>[] = [
       const assignee = row.original.assignee;
 
       if (!assignee) {
-        return <span className="text-muted-foreground">Unassigned</span>;
+        return <span className="text-muted-foreground">NA</span>;
       }
 
       return (

@@ -42,8 +42,13 @@ const ProjectAvatar = ({
 };
 
 const ProjectSwitcher = () => {
-  const { projects, activeProject, handleSetActiveProjectId, isLoading } =
-    useProject();
+  const {
+    projects,
+    activeProject,
+    handleSetActiveProjectId,
+    isLoading,
+    isProjectAdmin,
+  } = useProject();
 
   if (isLoading) {
     return (
@@ -134,11 +139,15 @@ const ProjectSwitcher = () => {
                 </DropdownMenuItem>
               );
             })}
-            <DropdownMenuSeparator className="my-1.5" />
-            <DropdownMenuItem className="gap-2 rounded-lg px-2 py-1" disabled>
-              <Plus className="size-4" />
-              New project
-            </DropdownMenuItem>
+            {isProjectAdmin && (
+              <>
+                <DropdownMenuSeparator className="my-1.5" />
+                <DropdownMenuItem className="gap-2 rounded-lg px-2 py-1" disabled>
+                  <Plus className="size-4" />
+                  New project
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

@@ -4,6 +4,8 @@ export const ticketPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 
 export const ticketTypeSchema = z.enum(["STORY", "BUG", "TASK", "EPIC"]);
 
+const ticketDescriptionSchema = z.looseObject({ type: z.literal("doc") });
+
 export const ticketIdParamsSchema = z.object({
   projectId: z.uuid("Invalid project ID"),
   ticketId: z.uuid("Invalid ticket ID"),
@@ -21,12 +23,7 @@ export const createTicketSchema = z
       .trim()
       .min(1, "Title is required")
       .max(140, "Title must be 140 characters or less"),
-    description: z
-      .string()
-      .trim()
-      .max(2000, "Description must be 2000 characters or less")
-      .optional()
-      .transform((value) => value || undefined),
+    description: ticketDescriptionSchema.optional(),
     priority: ticketPrioritySchema.optional(),
     type: ticketTypeSchema.optional(),
     assigneeId: z.uuid("Invalid assignee ID").nullable().optional(),
@@ -76,12 +73,7 @@ export const updateTicketSchema = z
       .min(1, "Title is required")
       .max(140, "Title must be 140 characters or less")
       .optional(),
-    description: z
-      .string()
-      .trim()
-      .max(2000, "Description must be 2000 characters or less")
-      .nullable()
-      .optional(),
+    description: ticketDescriptionSchema.nullable().optional(),
     priority: ticketPrioritySchema.optional(),
     type: ticketTypeSchema.optional(),
     assigneeId: z.uuid("Invalid assignee ID").nullable().optional(),

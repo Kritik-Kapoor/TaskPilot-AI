@@ -1,4 +1,5 @@
 import type { ProjectLabel } from "../types";
+import type { JSONContent } from "@tiptap/core";
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TicketType = "STORY" | "BUG" | "TASK" | "EPIC";
@@ -14,7 +15,7 @@ export type Ticket = {
   id: string;
   ticketKey: string;
   title: string;
-  description: string | null;
+  description: JSONContent | null;
   priority: TicketPriority;
   type: TicketType;
   position: number;
@@ -23,10 +24,15 @@ export type Ticket = {
   columnId: string;
   projectId: string;
   assigneeId: string | null;
-  createdById: string;
+  createdById: string | null;
   createdAt: string;
   updatedAt: string;
   assignee?: { id: string; username: string } | null;
+  createdBy?: { id: string; username: string } | null;
+};
+
+export type TicketDetail = Ticket & {
+  column: BoardColumn;
 };
 
 export type ApiColumnWithTickets = BoardColumn & {
@@ -42,7 +48,7 @@ export type CreateTicketPayload = {
   projectId: string;
   columnId: string;
   title: string;
-  description?: string;
+  description?: JSONContent;
   priority?: TicketPriority;
   type?: TicketType;
   assigneeId?: string | null;

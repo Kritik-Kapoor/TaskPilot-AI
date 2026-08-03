@@ -61,7 +61,7 @@ const CreateTicketForm = ({
 
       <form.AppField name="description">
         {(field) => (
-          <field.Textarea
+          <field.TicketEditor
             label="Description"
             placeholder="Add context, acceptance criteria, links…"
             optional

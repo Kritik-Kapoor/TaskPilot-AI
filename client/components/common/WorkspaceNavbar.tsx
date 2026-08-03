@@ -48,25 +48,22 @@ const WorkspaceNavbar = () => {
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
-        <Button
-          size="sm"
-          className="hidden bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95 sm:inline-flex"
-        >
+      <div className="ml-auto flex items-center gap-2">
+        <Button className="hidden bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95 sm:inline-flex">
           <Plus />
           Create
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Help">
+        <Button variant="ghost" size="icon-lg" aria-label="Help">
           <CircleHelp />
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon-lg"
           aria-label="Notifications"
           className="relative"
         >
           <Bell />
-          <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive" />
+          <span className="absolute top-1.25 right-1.5 size-2 rounded-full bg-destructive" />
         </Button>
         <div
           className="grid size-8 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-brand-foreground"

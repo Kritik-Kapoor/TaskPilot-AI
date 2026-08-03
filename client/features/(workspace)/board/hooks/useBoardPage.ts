@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import useCreateTicket from "../../hooks/useCreateTicket";
-import { getProjectBoard, repositionTicket } from "../lib/api";
+import { getProjectBoard, repositionTicket } from "../api";
 import {
   computeRepositionPayload,
   findTicketLocation,
@@ -166,8 +166,6 @@ const useBoardPage = () => {
 
   const totalCount = boardData?.totalTicketCount ?? 0;
 
-  // Resolve the "Todo" column ID from already-fetched board data.
-  // No column name is passed from the page — this hook owns that decision.
   const defaultColumnId = useMemo(() => {
     if (!boardData?.columns.length) return "";
 

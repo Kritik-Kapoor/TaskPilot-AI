@@ -7,7 +7,7 @@ import useCreateTicket from "../../hooks/useCreateTicket";
 import type { Ticket } from "../../board/types";
 import { getProjectBacklog } from "../lib/api";
 import type { ProjectBacklogResponse } from "../types";
-import { BacklogTableColumns } from "../components/BacklogTableColumns";
+import { createBacklogTableColumns } from "../components/BacklogTableColumns";
 
 const optimisticCreate = (
   old: ProjectBacklogResponse,
@@ -20,7 +20,7 @@ const optimisticCreate = (
 
 const useBacklogPage = () => {
   const queryClient = useQueryClient();
-  const { activeProject, projectMembers } = useProject();
+  const { activeProject, projectMembers, buildWorkspacePath } = useProject();
 
   const [query, setQuery] = useState("");
 
@@ -36,10 +36,15 @@ const useBacklogPage = () => {
     enabled: !!activeProject?.id,
   });
 
-  // Resolved column UUID from already-fetched backlog data.
   const backlogColumnId = backlogData?.column?.id ?? "";
 
-  const { form: createTicketForm, isOpen: isCreateTicketOpen, isSubmitting: isSubmittingCreateTicket, open: openCreateTicketDialog, close: closeCreateTicketDialog } = useCreateTicket({
+  const {
+    form: createTicketForm,
+    isOpen: isCreateTicketOpen,
+    isSubmitting: isSubmittingCreateTicket,
+    open: openCreateTicketDialog,
+    close: closeCreateTicketDialog,
+  } = useCreateTicket({
     columnId: backlogColumnId,
     onCreated: (ticket) => {
       queryClient.cancelQueries({ queryKey: backlogQueryKey });
@@ -69,7 +74,13 @@ const useBacklogPage = () => {
   const totalCount = backlogData?.totalTicketCount ?? 0;
   const filteredCount = tickets.length;
 
-  const columns = useMemo(() => BacklogTableColumns, []);
+  const columns = useMemo(
+    () =>
+      createBacklogTableColumns((ticketId) =>
+        buildWorkspacePath(`/ticket/${ticketId}`),
+      ),
+    [buildWorkspacePath],
+  );
 
   return {
     state: {

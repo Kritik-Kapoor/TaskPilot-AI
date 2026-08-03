@@ -1,8 +1,12 @@
+"use client";
+
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { initialsOf, getColor } from "@/lib/utils/common";
 import { useProject } from "@/providers/projectProvider";
+import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { PRIORITY_CLASS, TYPE_CLASS } from "../lib/constants";
 import type { Ticket } from "../types";
 
@@ -13,7 +17,9 @@ type TicketCardProps = {
 };
 
 const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
-  const { projectMembers } = useProject();
+  const router = useRouter();
+  const { projectMembers, buildWorkspacePath } = useProject();
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
   const { ref, isDragging } = useSortable({
     id: ticket.id,
@@ -27,13 +33,32 @@ const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
     (member) => member.id === ticket.assigneeId,
   );
 
+  const ticketHref = buildWorkspacePath(`/ticket/${ticket.id}`);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging || !pointerStart.current) return;
+
+    const deltaX = Math.abs(event.clientX - pointerStart.current.x);
+    const deltaY = Math.abs(event.clientY - pointerStart.current.y);
+
+    if (deltaX > 6 || deltaY > 6) return;
+
+    router.push(ticketHref);
+  };
+
   return (
     <div
       ref={ref}
+      onPointerDown={handlePointerDown}
+      onClick={handleClick}
       className={cn(
-        "group cursor-grab rounded-lg border border-border bg-card p-3 shadow-card transition-all",
+        "group cursor-pointer rounded-lg border border-border bg-card p-3 shadow-card transition-all",
         "hover:border-brand/40 hover:shadow-elegant",
-        isDragging && "opacity-40 shadow-none",
+        isDragging && "cursor-grabbing opacity-40 shadow-none",
       )}
     >
       <div className="flex items-center justify-between">

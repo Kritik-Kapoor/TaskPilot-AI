@@ -10,7 +10,7 @@ import {
   TICKET_POSITION_GAP,
 } from "../utils/ticketPosition.utils.js";
 import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 
 export class TicketServiceError extends Error {
   statusCode: number;
@@ -37,6 +37,12 @@ const ticketBaseSelect = {
   createdAt: true,
   updatedAt: true,
   assignee: {
+    select: {
+      id: true,
+      username: true,
+    },
+  },
+  createdBy: {
     select: {
       id: true,
       username: true,
@@ -258,7 +264,7 @@ export const createTicket = async (
         columnId: column.id,
         ticketKey,
         title: input.title,
-        description: input.description,
+        description: input.description as Prisma.InputJsonValue | undefined,
         priority: input.priority ?? "MEDIUM",
         type: input.type ?? "TASK",
         assigneeId: input.assigneeId ?? null,
@@ -441,7 +447,10 @@ export const updateTicket = async (
       data: {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.description !== undefined && {
-          description: input.description,
+          description:
+            input.description === null
+              ? Prisma.DbNull
+              : (input.description as Prisma.InputJsonValue),
         }),
         ...(input.priority !== undefined && { priority: input.priority }),
         ...(input.type !== undefined && { type: input.type }),
@@ -451,7 +460,7 @@ export const updateTicket = async (
         }),
         ...(input.labels !== undefined && {
           labels: {
-            connect: input.labels.map((label) => ({ id: label })),
+            set: input.labels.map((labelId) => ({ id: labelId })),
           },
         }),
         ...(isMovingColumn && { columnId: targetColumnId }),

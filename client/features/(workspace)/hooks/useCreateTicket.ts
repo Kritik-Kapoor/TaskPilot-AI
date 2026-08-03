@@ -6,7 +6,13 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { createTicket } from "../board/lib/api";
+import { createTicket } from "../board/api";
+import {
+  EMPTY_TICKET_DESCRIPTION,
+  getTicketDescriptionTextLength,
+  isTicketDescriptionEmpty,
+} from "@/components/common/ticket-editor/ticketDescription";
+import type { JSONContent } from "@tiptap/core";
 import {
   isUuid,
   type Ticket,
@@ -17,6 +23,15 @@ import {
 const ticketTypeSchema = z.enum(["STORY", "BUG", "TASK", "EPIC"]);
 const ticketPrioritySchema = z.enum(["URGENT", "HIGH", "MEDIUM", "LOW"]);
 
+const ticketDescriptionSchema = z.custom<JSONContent>(
+  (value) =>
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as JSONContent).type === "doc",
+  { message: "Invalid description format" },
+);
+
 export const createTicketFormSchema = z.object({
   type: ticketTypeSchema,
   priority: ticketPrioritySchema,
@@ -25,9 +40,14 @@ export const createTicketFormSchema = z.object({
     .trim()
     .min(1, { message: "Title is required" })
     .max(140, { message: "Title must be 140 characters or less" }),
-  description: z
-    .string()
-    .max(2000, { message: "Description must be 2000 characters or less" }),
+  description: ticketDescriptionSchema.superRefine((value, ctx) => {
+    if (getTicketDescriptionTextLength(value) > 2000) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Description must be 2000 characters or less",
+      });
+    }
+  }),
   assigneeId: z.string(),
   storyPoints: z.string().superRefine((value, ctx) => {
     if (!value.trim()) return;
@@ -93,7 +113,7 @@ const useCreateTicket = ({
       type: "TASK" as TicketType,
       priority: "MEDIUM" as TicketPriority,
       title: "",
-      description: "",
+      description: EMPTY_TICKET_DESCRIPTION,
       assigneeId: "unassigned",
       storyPoints: "",
       labels: [] as string[],
@@ -119,13 +139,15 @@ const useCreateTicket = ({
             ? value.assigneeId
             : null;
 
+      const description = isTicketDescriptionEmpty(value.description)
+        ? undefined
+        : value.description;
+
       await mutation.mutateAsync({
         projectId: activeProject.id,
         columnId,
         title: value.title.trim(),
-        ...(value.description.trim() && {
-          description: value.description.trim(),
-        }),
+        ...(description && { description }),
         priority: value.priority,
         type: value.type,
         assigneeId,

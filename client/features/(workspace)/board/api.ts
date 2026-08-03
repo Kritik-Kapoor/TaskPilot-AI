@@ -4,7 +4,7 @@ import type {
   ProjectBoardResponse,
   RepositionTicketPayload,
   Ticket,
-} from "../types";
+} from "./types";
 
 export const getProjectBoard = (projectId: string) =>
   apiFetch<ProjectBoardResponse>(`/ticket/project-board/${projectId}`, {

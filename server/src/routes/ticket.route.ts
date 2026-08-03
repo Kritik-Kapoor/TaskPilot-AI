@@ -7,7 +7,15 @@ import {
   getTicketByIdHandler,
   updateTicketHandler,
 } from "../controllers/ticket.controller.js";
+import {
+  createTicketCommentHandler,
+  getTicketCommentsHandler,
+} from "../controllers/comment.controller.js";
 import { validate } from "../middlewares/validateSchema.middleware.js";
+import {
+  createCommentSchema,
+  ticketCommentParamsSchema,
+} from "../schemas/comment.schema.js";
 import {
   createTicketSchema,
   ticketIdParamsSchema,
@@ -29,6 +37,19 @@ router.get(
   "/project-backlog/:projectId",
   validate(projectIdParamsSchema, "params"),
   getProjectBacklogTicketsHandler,
+);
+
+router.get(
+  "/:projectId/:ticketId/comments",
+  validate(ticketCommentParamsSchema, "params"),
+  getTicketCommentsHandler,
+);
+
+router.post(
+  "/:projectId/:ticketId/comments",
+  validate(ticketCommentParamsSchema, "params"),
+  validate(createCommentSchema),
+  createTicketCommentHandler,
 );
 
 router.get(
