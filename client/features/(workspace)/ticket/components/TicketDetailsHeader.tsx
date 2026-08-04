@@ -21,7 +21,7 @@ import {
   Link2,
   Loader2,
   MessageSquare,
-  Pencil,
+  SquarePen,
   Trash2,
   User,
 } from "lucide-react";
@@ -87,12 +87,6 @@ const TicketDetailsHeader = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const titleInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!isEditingTitle) {
-      setDraftTitle(title);
-    }
-  }, [title, isEditingTitle]);
 
   useEffect(() => {
     if (isEditingTitle) {
@@ -225,7 +219,7 @@ const TicketDetailsHeader = ({
           />
         ) : (
           <>
-            <h1 className="min-w-0 flex-1 text-xl leading-tight font-semibold md:text-2xl">
+            <h1 className="min-w-0 text-xl leading-tight font-semibold md:text-2xl">
               {title}
             </h1>
             {canEdit && (
@@ -235,9 +229,12 @@ const TicketDetailsHeader = ({
                 size="icon-sm"
                 aria-label="Edit title"
                 className="mt-1 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => setIsEditingTitle(true)}
+                onClick={() => {
+                  setDraftTitle(title);
+                  setIsEditingTitle(true);
+                }}
               >
-                <Pencil className="h-4 w-4" />
+                <SquarePen className="size-4 text-blue-500" />
               </Button>
             )}
           </>
@@ -246,21 +243,21 @@ const TicketDetailsHeader = ({
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <Calendar className="h-3.5 w-3.5" />
-          Created {formatTicketDate(ticket.createdAt)}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5" />
-          Updated {formatTicketDate(ticket.updatedAt)}
+          <User className="h-3.5 w-3.5" />
+          Created by
+          <span className="font-medium text-foreground">{creatorName}</span>
         </span>
         <span className="inline-flex items-center gap-1.5">
           <MessageSquare className="h-3.5 w-3.5" />
           {commentCount} {commentCount === 1 ? "comment" : "comments"}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <User className="h-3.5 w-3.5" />
-          Created by{" "}
-          <span className="font-medium text-foreground">{creatorName}</span>
+          <Calendar className="h-3.5 w-3.5" />
+          Created {formatTicketDate(ticket.createdAt)}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5" />
+          Updated {formatTicketDate(ticket.updatedAt)}
         </span>
       </div>
     </header>

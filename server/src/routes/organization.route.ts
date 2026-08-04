@@ -3,10 +3,12 @@ import {
   checkOrganizationName,
   createOrganization,
   deleteOrganization,
+  getIncomingJoinRequestsHandler,
   getMyJoinRequests,
   getOrganization,
   getProjectsList,
   joinRequest,
+  reviewJoinRequestHandler,
   searchOrganizations,
   transferOwnership,
   updateOrganization,
@@ -18,6 +20,8 @@ import {
   checkOrganizationNameQuerySchema,
   createOrganizationSchema,
   organizationIdParamsSchema,
+  joinRequestIdParamsSchema,
+  reviewJoinRequestBodySchema,
   searchOrganizationsQuerySchema,
   transferOwnershipParamsSchema,
   updateOrganizationSchema,
@@ -47,6 +51,20 @@ router.get(
 );
 
 router.get("/join-requests", authenticateUser, getMyJoinRequests);
+
+router.get(
+  "/join-requests/incoming",
+  authenticateWorkspaceUser,
+  getIncomingJoinRequestsHandler,
+);
+
+router.patch(
+  "/join-requests/:requestId",
+  authenticateWorkspaceUser,
+  validate(joinRequestIdParamsSchema, "params"),
+  validate(reviewJoinRequestBodySchema),
+  reviewJoinRequestHandler,
+);
 
 router.post(
   "/join-request/:orgId",

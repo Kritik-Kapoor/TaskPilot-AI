@@ -8,7 +8,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import useCreateTicket from "../../hooks/useCreateTicket";
-import { getProjectBoard, repositionTicket } from "../api";
+import {
+  getProjectBoard,
+  projectBoardQueryKey,
+  repositionTicket,
+} from "../api";
 import {
   computeRepositionPayload,
   findTicketLocation,
@@ -147,7 +151,7 @@ const useBoardPage = () => {
     },
   });
 
-  const boardQueryKey = ["project-board", activeProject?.id] as const;
+  const boardQueryKey = projectBoardQueryKey(activeProject?.id ?? "");
 
   const {
     data: boardData,

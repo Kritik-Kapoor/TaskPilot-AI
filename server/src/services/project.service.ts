@@ -188,3 +188,16 @@ export async function generateProjectKey(
 
   return `${baseKey}${counter}`;
 }
+
+export const normalizeProjectMemberObject = ({
+  role,
+  user,
+}: {
+  role: string;
+  user: { id: string; username: string; email: string };
+}) => ({
+  role,
+  id: user.id,
+  username: user.username,
+  email: user.email,
+});

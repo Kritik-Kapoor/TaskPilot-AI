@@ -1,14 +1,26 @@
 import { apiFetch } from "@/lib/utils/apiClient";
 import type {
+  BoardColumn,
   CreateTicketPayload,
   ProjectBoardResponse,
   RepositionTicketPayload,
   Ticket,
 } from "./types";
 
+export const projectBoardQueryKey = (projectId: string) =>
+  ["project-board", projectId] as const;
+
+export const projectColumnsQueryKey = (projectId: string) =>
+  ["project-columns", projectId] as const;
+
 export const getProjectBoard = (projectId: string) =>
   apiFetch<ProjectBoardResponse>(`/ticket/project-board/${projectId}`, {
     fallbackErrorMessage: "Failed to fetch board tickets",
+  });
+
+export const getProjectColumns = (projectId: string) =>
+  apiFetch<{ columns: BoardColumn[] }>(`/ticket/project-columns/${projectId}`, {
+    fallbackErrorMessage: "Failed to fetch project columns",
   });
 
 export const createTicket = (payload: CreateTicketPayload) =>

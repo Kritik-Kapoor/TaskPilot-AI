@@ -56,3 +56,14 @@ export type OrganizationIdParams = z.infer<typeof organizationIdParamsSchema>;
 export type TransferOwnershipParams = z.infer<
   typeof transferOwnershipParamsSchema
 >;
+
+export const joinRequestIdParamsSchema = z.object({
+  requestId: z.uuid("Invalid join request ID"),
+});
+
+export const reviewJoinRequestBodySchema = z.object({
+  action: z.enum(["approve", "decline"]),
+});
+
+export type JoinRequestIdParams = z.infer<typeof joinRequestIdParamsSchema>;
+export type ReviewJoinRequestBody = z.infer<typeof reviewJoinRequestBodySchema>;

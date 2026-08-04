@@ -14,6 +14,7 @@ type FormInputProps = FormControlProps &
     | "step"
     | "inputMode"
     | "pattern"
+    | "disabled"
   >;
 
 export function FormInput({
@@ -26,6 +27,7 @@ export function FormInput({
   step,
   inputMode,
   pattern,
+  disabled,
   ...props
 }: FormInputProps) {
   const field = useFieldContext<string>();
@@ -54,6 +56,7 @@ export function FormInput({
         onChange={handleChange}
         aria-invalid={isInvalid}
         placeholder={placeholder}
+        disabled={disabled}
       />
     </FormBase>
   );

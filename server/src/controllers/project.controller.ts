@@ -8,7 +8,9 @@ import { prisma } from "../config/db.js";
 import type {
   CreateLabelBody,
   CreateProjectInput,
+  PatchProjectMemberBody,
   ProjectIdParams,
+  ProjectMemberUserIdParams,
   UpdateLabelParams,
   UpdateProjectInput,
   UpdateProjectMemberBody,
@@ -25,6 +27,7 @@ import {
   getOrgMember,
   getProjectMembership,
   isDuplicateNameError,
+  normalizeProjectMemberObject,
   updateProjectDetails,
 } from "../services/project.service.js";
 import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
@@ -414,6 +417,19 @@ export const getUserRoleInProject = async (req: Request, res: Response) => {
 export const getProjectMembers = async (req: Request, res: Response) => {
   try {
     const { projectId } = req.validated!.params as ProjectIdParams;
+    const { userId, orgId } = req.user!;
+
+    if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
+
+    const membership = await getProjectMembership(userId, projectId);
+
+    if (!membership) {
+      return new ApiResponse(
+        403,
+        null,
+        "You are not a member of this project",
+      ).send(res);
+    }
 
     const projectMembers = await prisma.projectMember.findMany({
       where: { projectId },
@@ -423,8 +439,12 @@ export const getProjectMembers = async (req: Request, res: Response) => {
           select: {
             id: true,
             username: true,
+            email: true,
           },
         },
+      },
+      orderBy: {
+        user: { username: "asc" },
       },
     });
 
@@ -432,12 +452,205 @@ export const getProjectMembers = async (req: Request, res: Response) => {
       role,
       id: user.id,
       username: user.username,
+      email: user.email,
     }));
 
     return new ApiResponse(
       200,
       members,
       "Project members fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const patchProjectMember = async (req: Request, res: Response) => {
+  try {
+    const { projectId, userId: userToUpdateId } = req.validated!
+      .params as ProjectMemberUserIdParams;
+    const { username, role } = req.validated!.body as PatchProjectMemberBody;
+    const { userId, orgId } = req.user!;
+
+    if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: orgId },
+      select: {
+        id: true,
+        organization: {
+          select: { ownerId: true },
+        },
+      },
+    });
+
+    if (!project) {
+      return new ApiResponse(404, null, "Project not found").send(res);
+    }
+
+    const actorMembership = await prisma.projectMember.findUnique({
+      where: {
+        userId_projectId: { userId, projectId },
+      },
+      select: { role: true },
+    });
+
+    if (actorMembership?.role !== "ADMIN") {
+      return new ApiResponse(
+        403,
+        null,
+        "Only project admins can update members",
+      ).send(res);
+    }
+
+    const targetMember = await prisma.projectMember.findUnique({
+      where: {
+        userId_projectId: { userId: userToUpdateId, projectId },
+      },
+      select: {
+        role: true,
+        user: {
+          select: {
+            id: true,
+            organizationId: true,
+          },
+        },
+      },
+    });
+
+    if (!targetMember) {
+      return new ApiResponse(404, null, "Project member not found").send(res);
+    }
+
+    if (targetMember.user.organizationId !== orgId) {
+      return new ApiResponse(
+        403,
+        null,
+        "Target user is not a member of this organization",
+      ).send(res);
+    }
+
+    if (
+      userToUpdateId === project.organization.ownerId &&
+      role &&
+      role !== "ADMIN"
+    ) {
+      return new ApiResponse(
+        403,
+        null,
+        "Organization owner must remain a project admin",
+      ).send(res);
+    }
+
+    const updatedMember = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userToUpdateId },
+        data: { username },
+      });
+
+      return await tx.projectMember.update({
+        where: {
+          userId_projectId: { userId: userToUpdateId, projectId },
+        },
+        data: { role },
+        select: {
+          id: true,
+          role: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
+        },
+      });
+    });
+
+    return new ApiResponse(
+      200,
+      normalizeProjectMemberObject(updatedMember),
+      "Project member updated successfully",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const deleteProjectMember = async (req: Request, res: Response) => {
+  try {
+    const { projectId, userId: userToUpdateId } = req.validated!
+      .params as ProjectMemberUserIdParams;
+    const { userId, orgId } = req.user!;
+
+    if (!orgId) return new ApiResponse(401, null, "Unauthorized").send(res);
+
+    if (userToUpdateId === userId) {
+      return new ApiResponse(
+        400,
+        null,
+        "You cannot remove yourself from the project",
+      ).send(res);
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: orgId },
+      select: {
+        id: true,
+        organization: {
+          select: { ownerId: true },
+        },
+      },
+    });
+
+    if (!project) {
+      return new ApiResponse(404, null, "Project not found").send(res);
+    }
+
+    const actorMembership = await prisma.projectMember.findUnique({
+      where: {
+        userId_projectId: { userId, projectId },
+      },
+      select: { role: true },
+    });
+
+    if (actorMembership?.role !== "ADMIN") {
+      return new ApiResponse(
+        403,
+        null,
+        "Only project admins can remove members",
+      ).send(res);
+    }
+
+    if (userToUpdateId === project.organization.ownerId) {
+      return new ApiResponse(
+        403,
+        null,
+        "Organization owner cannot be removed from a project",
+      ).send(res);
+    }
+
+    const targetMember = await prisma.projectMember.findUnique({
+      where: {
+        userId_projectId: { userId: userToUpdateId, projectId },
+      },
+      select: { id: true },
+    });
+
+    if (!targetMember) {
+      return new ApiResponse(404, null, "Project member not found").send(res);
+    }
+
+    await prisma.projectMember.delete({
+      where: {
+        userId_projectId: { userId: userToUpdateId, projectId },
+      },
+    });
+
+    return new ApiResponse(
+      200,
+      null,
+      "Project member removed successfully",
     ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);

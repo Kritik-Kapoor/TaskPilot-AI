@@ -112,6 +112,164 @@ export const mapJoinRequestSummary = (joinRequest: {
   organization: mapOrganizationSummary(joinRequest.organization),
 });
 
+const incomingJoinRequestSelect = {
+  id: true,
+  status: true,
+  createdAt: true,
+  user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+    },
+  },
+} as const;
+
+export const mapIncomingJoinRequest = (joinRequest: {
+  id: string;
+  status: "PENDING" | "APPROVED" | "DECLINED";
+  createdAt: Date;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+  };
+}) => ({
+  id: joinRequest.id,
+  status: joinRequest.status,
+  requestedOn: joinRequest.createdAt.toISOString(),
+  user: joinRequest.user,
+});
+
+export const assertCanManageJoinRequests = async (
+  orgId: string,
+  userId: string,
+) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      organizationId: true,
+      organizationRole: true,
+    },
+  });
+
+  if (!user || user.organizationId !== orgId) {
+    throw new ApiError(403, "You are not a member of this organization");
+  }
+
+  if (user.organizationRole !== "OWNER" && user.organizationRole !== "ADMIN") {
+    throw new ApiError(
+      403,
+      "Only organization admins can manage join requests",
+    );
+  }
+
+  return user;
+};
+
+export const getIncomingJoinRequests = async (orgId: string, userId: string) => {
+  await assertCanManageJoinRequests(orgId, userId);
+
+  const joinRequests = await prisma.organizationJoinRequest.findMany({
+    where: { organizationId: orgId },
+    select: incomingJoinRequestSelect,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return joinRequests.map(mapIncomingJoinRequest);
+};
+
+export const reviewJoinRequest = async (
+  orgId: string,
+  reviewerId: string,
+  requestId: string,
+  action: "approve" | "decline",
+) => {
+  await assertCanManageJoinRequests(orgId, reviewerId);
+
+  const joinRequest = await prisma.organizationJoinRequest.findFirst({
+    where: {
+      id: requestId,
+      organizationId: orgId,
+    },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+      user: {
+        select: {
+          id: true,
+          organizationId: true,
+        },
+      },
+    },
+  });
+
+  if (!joinRequest) {
+    throw new ApiError(404, "Join request not found");
+  }
+
+  if (joinRequest.status !== "PENDING") {
+    throw new ApiError(400, "This join request has already been reviewed");
+  }
+
+  if (action === "decline") {
+    const updated = await prisma.organizationJoinRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "DECLINED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+      select: incomingJoinRequestSelect,
+    });
+
+    return mapIncomingJoinRequest(updated);
+  }
+
+  if (joinRequest.user.organizationId) {
+    throw new ApiError(
+      400,
+      "This user already belongs to an organization",
+    );
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: joinRequest.userId },
+      data: {
+        organizationId: orgId,
+        organizationRole: "MEMBER",
+      },
+    });
+
+    await tx.organizationJoinRequest.updateMany({
+      where: {
+        userId: joinRequest.userId,
+        status: "PENDING",
+        NOT: { id: requestId },
+      },
+      data: {
+        status: "DECLINED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+    });
+
+    return tx.organizationJoinRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "APPROVED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+      select: incomingJoinRequestSelect,
+    });
+  });
+
+  return mapIncomingJoinRequest(updated);
+};
+
 export async function createOrganizationTransaction(
   orgName: string,
   description: string | null,

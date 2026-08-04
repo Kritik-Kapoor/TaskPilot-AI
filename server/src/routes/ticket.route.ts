@@ -3,6 +3,7 @@ import {
   createTicketHandler,
   deleteTicketHandler,
   getProjectBacklogTicketsHandler,
+  getProjectColumnsHandler,
   getProjectTicketsHandler,
   getTicketByIdHandler,
   updateTicketHandler,
@@ -37,6 +38,12 @@ router.get(
   "/project-backlog/:projectId",
   validate(projectIdParamsSchema, "params"),
   getProjectBacklogTicketsHandler,
+);
+
+router.get(
+  "/project-columns/:projectId",
+  validate(projectIdParamsSchema, "params"),
+  getProjectColumnsHandler,
 );
 
 router.get(

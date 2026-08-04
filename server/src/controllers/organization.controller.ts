@@ -10,7 +10,9 @@ import { ensureUserIsProjectAdminOnAllOrgProjects } from "../utils/projectMember
 import type {
   CheckOrganizationNameQuery,
   CreateOrganizationInput,
+  JoinRequestIdParams,
   OrganizationIdParams,
+  ReviewJoinRequestBody,
   SearchOrganizationsQuery,
   TransferOwnershipParams,
   UpdateOrganizationInput,
@@ -19,9 +21,11 @@ import {
   createOrganizationTransaction,
   findConflictingOrganization,
   findOrganizationByName,
+  getIncomingJoinRequests,
   mapOrganizationSummary,
   mapJoinRequestSummary,
   normalizeOrgName,
+  reviewJoinRequest,
   searchDiscoverableOrganizations,
   getUserJoinRequests,
 } from "../services/organization.service.js";
@@ -387,6 +391,67 @@ export const getMyJoinRequests = async (req: Request, res: Response) => {
       "Join requests fetched successfully",
     ).send(res);
   } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getIncomingJoinRequestsHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { orgId, userId } = req.user!;
+
+    if (!orgId) {
+      return new ApiResponse(401, null, "Unauthorized").send(res);
+    }
+
+    const joinRequests = await getIncomingJoinRequests(orgId, userId);
+
+    return new ApiResponse(
+      200,
+      joinRequests,
+      "Incoming join requests fetched successfully",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const reviewJoinRequestHandler = async (req: Request, res: Response) => {
+  try {
+    const { orgId, userId } = req.user!;
+
+    if (!orgId) {
+      return new ApiResponse(401, null, "Unauthorized").send(res);
+    }
+
+    const { requestId } = req.validated!.params as JoinRequestIdParams;
+    const { action } = req.validated!.body as ReviewJoinRequestBody;
+
+    const joinRequest = await reviewJoinRequest(
+      orgId,
+      userId,
+      requestId,
+      action,
+    );
+
+    return new ApiResponse(
+      200,
+      joinRequest,
+      action === "approve"
+        ? "Join request approved successfully"
+        : "Join request declined successfully",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

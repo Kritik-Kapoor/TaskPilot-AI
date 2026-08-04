@@ -18,7 +18,12 @@ import {
   updateTicket,
 } from "../api";
 import type { TicketComment, UpdateTicketPayload } from "../types";
-import { getProjectBoard } from "../../board/api";
+import {
+  getProjectColumns,
+  projectBoardQueryKey,
+  projectColumnsQueryKey,
+} from "../../board/api";
+import { projectBacklogQueryKey } from "../../backlog/lib/api";
 
 const ticketQueryKey = (projectId: string, ticketId: string) =>
   ["ticket", projectId, ticketId] as const;
@@ -47,9 +52,9 @@ const useTicketDetails = (ticketId: string) => {
     enabled: Boolean(projectId && ticketId),
   });
 
-  const boardQuery = useQuery({
-    queryKey: ["board", projectId],
-    queryFn: () => getProjectBoard(projectId),
+  const columnsQuery = useQuery({
+    queryKey: projectColumnsQueryKey(projectId),
+    queryFn: () => getProjectColumns(projectId),
     enabled: Boolean(projectId),
   });
 
@@ -60,18 +65,10 @@ const useTicketDetails = (ticketId: string) => {
   });
 
   const columns = useMemo(() => {
-    const fromBoard =
-      boardQuery.data?.columns.map((column) => ({
-        id: column.id,
-        name: column.name,
-        color: column.color,
-        position: column.position,
-      })) ?? [];
-
-    if (fromBoard.length > 0) return fromBoard;
+    if (columnsQuery.data?.columns.length) return columnsQuery.data.columns;
     if (ticketQuery.data?.column) return [ticketQuery.data.column];
     return [];
-  }, [boardQuery.data, ticketQuery.data]);
+  }, [columnsQuery.data, ticketQuery.data]);
 
   const serverDescription = useMemo(
     () => normalizeTicketDescription(ticketQuery.data?.description),
@@ -98,9 +95,9 @@ const useTicketDetails = (ticketId: string) => {
   }, [ticketQuery.data]);
 
   const invalidateTicketLists = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["board", projectId] });
+    queryClient.invalidateQueries({ queryKey: projectBoardQueryKey(projectId) });
     queryClient.invalidateQueries({
-      queryKey: ["project-backlog", projectId],
+      queryKey: projectBacklogQueryKey(projectId),
     });
   }, [projectId, queryClient]);
 

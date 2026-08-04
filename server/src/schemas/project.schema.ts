@@ -48,6 +48,19 @@ export const updateProjectMemberBodySchema = z.object({
   role: projectRoleSchema.optional(),
 });
 
+export const projectMemberUserIdParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  userId: z.uuid("Invalid user ID"),
+});
+
+export const patchProjectMemberBodySchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters long"),
+  role: projectRoleSchema,
+});
+
 export const createLabelBodySchema = z.object({
   name: z
     .string()
@@ -72,6 +85,12 @@ export type UpdateProjectMemberParams = z.infer<
 >;
 export type UpdateProjectMemberBody = z.infer<
   typeof updateProjectMemberBodySchema
+>;
+export type ProjectMemberUserIdParams = z.infer<
+  typeof projectMemberUserIdParamsSchema
+>;
+export type PatchProjectMemberBody = z.infer<
+  typeof patchProjectMemberBodySchema
 >;
 export type CreateLabelBody = z.infer<typeof createLabelBodySchema>;
 export type UpdateLabelParams = z.infer<typeof updateLabelParamsSchema>;

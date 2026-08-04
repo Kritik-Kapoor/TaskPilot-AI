@@ -1,5 +1,9 @@
 import { apiFetch } from "@/lib/utils/apiClient";
+import type { ProjectRole } from "@/features/(auth)/types";
 import type { Project, ProjectLabel, ProjectMember } from "./types";
+
+export const projectMembersQueryKey = (projectId: string) =>
+  ["project-members", projectId] as const;
 
 export const getProjects = () =>
   apiFetch<Project[]>("/organization/projects", {
@@ -9,6 +13,28 @@ export const getProjects = () =>
 export const getProjectMembers = (projectId: string) =>
   apiFetch<ProjectMember[]>(`/project/${projectId}/members`, {
     fallbackErrorMessage: "Failed to fetch project members",
+  });
+
+export type UpdateProjectMemberPayload = {
+  username: string;
+  role: ProjectRole;
+};
+
+export const updateProjectMember = (
+  projectId: string,
+  userId: string,
+  payload: UpdateProjectMemberPayload,
+) =>
+  apiFetch<ProjectMember>(`/project/${projectId}/members/${userId}`, {
+    method: "PATCH",
+    body: payload,
+    fallbackErrorMessage: "Failed to update member",
+  });
+
+export const removeProjectMember = (projectId: string, userId: string) =>
+  apiFetch<{ id: string } | null>(`/project/${projectId}/members/${userId}`, {
+    method: "DELETE",
+    fallbackErrorMessage: "Failed to remove member",
   });
 
 export const getProjectLabels = (projectId: string) =>

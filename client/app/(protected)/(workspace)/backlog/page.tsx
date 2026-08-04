@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "@/components/common/table";
+import ConfirmationDialog from "@/components/common/dialogs/ConfirmationDialogl";
 import FormDialog from "@/components/common/dialogs/FormDialog";
 import CreateTicketForm from "@/features/(workspace)/components/CreateTicketForm";
 import BacklogToolbar from "@/features/(workspace)/backlog/components/BacklogToolbar";
@@ -20,7 +21,15 @@ const BacklogPage = () => {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <BacklogToolbar state={state} actions={actions} />
         <div className="min-h-0 flex-1 overflow-auto pt-4">
-          <DataTable columns={state.columns} data={state.tickets} />
+          <DataTable
+            columns={state.columns}
+            data={state.tickets}
+            enableRowSelection={state.canEdit}
+            rowSelection={state.rowSelection}
+            onRowSelectionChange={actions.setRowSelection}
+            getRowId={(ticket) => ticket.id}
+            isPaginated={false}
+          />
         </div>
       </div>
 
@@ -51,6 +60,16 @@ const BacklogPage = () => {
           onCancel={actions.closeCreateTicketDialog}
         />
       </FormDialog>
+
+      <ConfirmationDialog
+        isOpen={state.isDeleteDialogOpen}
+        onClose={actions.closeDeleteSelectedDialog}
+        callbackFn={actions.confirmDeleteSelected}
+        title={`Delete ${state.selectedCount} ticket${state.selectedCount === 1 ? "" : "s"}?`}
+        description={`This will permanently delete ${state.selectedCount} selected ticket${state.selectedCount === 1 ? "" : "s"} from the backlog.`}
+        btnText={`${state.selectedCount} ticket${state.selectedCount === 1 ? "" : "s"}`}
+        isLoading={state.isDeletingSelected}
+      />
     </>
   );
 };

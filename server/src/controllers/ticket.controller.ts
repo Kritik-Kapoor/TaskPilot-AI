@@ -13,6 +13,7 @@ import {
   createTicket,
   deleteTicket,
   getProjectBacklogTickets,
+  getProjectColumns,
   getProjectTickets,
   getTicketById,
   TicketServiceError,
@@ -75,6 +76,23 @@ export const getProjectBacklogTicketsHandler = async (
       200,
       backlog,
       "Project backlog fetched successfully",
+    ).send(res);
+  } catch (error) {
+    return handleTicketServiceError(error, res);
+  }
+};
+
+export const getProjectColumnsHandler = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.validated!.params as ProjectIdParams;
+    const { userId, orgId } = getWorkspaceUser(req);
+
+    const result = await getProjectColumns(orgId, userId, projectId);
+
+    return new ApiResponse(
+      200,
+      result,
+      "Project columns fetched successfully",
     ).send(res);
   } catch (error) {
     return handleTicketServiceError(error, res);

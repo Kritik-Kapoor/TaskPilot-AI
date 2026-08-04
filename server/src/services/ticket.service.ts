@@ -315,6 +315,35 @@ export const getProjectTickets = async (
   return { columns, totalTicketCount };
 };
 
+const columnSelect = {
+  id: true,
+  name: true,
+  color: true,
+  position: true,
+} as const;
+
+export const getProjectColumns = async (
+  orgId: string,
+  userId: string,
+  projectId: string,
+) => {
+  await assertProjectAccess(userId, orgId, projectId);
+
+  const columns = await prisma.boardColumn.findMany({
+    where: { projectId },
+    orderBy: { position: "asc" },
+    select: columnSelect,
+  });
+
+  return { columns };
+};
+
+const findBacklogColumn = (projectId: string) =>
+  prisma.boardColumn.findFirst({
+    where: { projectId, name: BACKLOG_COLUMN_NAME },
+    select: columnSelect,
+  });
+
 export const getProjectBacklogTickets = async (
   orgId: string,
   userId: string,
@@ -322,10 +351,7 @@ export const getProjectBacklogTickets = async (
 ) => {
   await assertProjectAccess(userId, orgId, projectId);
 
-  const backlogColumn = await prisma.boardColumn.findFirst({
-    where: { projectId, name: BACKLOG_COLUMN_NAME },
-    select: { id: true, name: true, color: true },
-  });
+  const backlogColumn = await findBacklogColumn(projectId);
 
   if (!backlogColumn) {
     return { column: null, tickets: [], totalTicketCount: 0 };

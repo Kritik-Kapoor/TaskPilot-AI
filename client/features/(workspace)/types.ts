@@ -11,6 +11,7 @@ export type ProjectMember = {
   role: string;
   id: string;
   username: string;
+  email: string;
 };
 
 export type ProjectLabel = {

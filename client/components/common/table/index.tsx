@@ -7,6 +7,8 @@ import {
   getPaginationRowModel,
   type ColumnFiltersState,
   getFilteredRowModel,
+  type OnChangeFn,
+  type RowSelectionState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -33,6 +35,10 @@ interface DataTableProps<TData extends object, TValue> {
   pageSize?: number;
   canGetNextPage?: boolean;
   onTableRowClick?: (id: string) => void;
+  enableRowSelection?: boolean;
+  rowSelection?: RowSelectionState;
+  onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  getRowId?: (originalRow: TData, index: number) => string;
   mainClasses?: string;
   bodyClasses?: string;
   headerClasses?: string;
@@ -51,6 +57,10 @@ export function DataTable<TData extends object, TValue>({
   pageSize = 10,
   canGetNextPage = false,
   onTableRowClick,
+  enableRowSelection = false,
+  rowSelection,
+  onRowSelectionChange,
+  getRowId,
   mainClasses,
   bodyClasses,
   headerClasses,
@@ -66,8 +76,12 @@ export function DataTable<TData extends object, TValue>({
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     manualPagination: manualPagination,
+    enableRowSelection,
+    onRowSelectionChange,
+    getRowId,
     state: {
       columnFilters,
+      ...(enableRowSelection && rowSelection !== undefined ? { rowSelection } : {}),
       ...(manualPagination && page !== undefined
         ? {
             pagination: {

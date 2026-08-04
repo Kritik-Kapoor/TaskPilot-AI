@@ -3,11 +3,13 @@ import {
   createLabel,
   createProject,
   deleteProject,
+  deleteProjectMember,
   getLabels,
   getProject,
   getProjectBoardColumns,
   getProjectMembers,
   getUserRoleInProject,
+  patchProjectMember,
   updateLabel,
   updateProject,
   updateProjectMember,
@@ -16,7 +18,9 @@ import { validate } from "../middlewares/validateSchema.middleware.js";
 import {
   createLabelBodySchema,
   createProjectSchema,
+  patchProjectMemberBodySchema,
   projectIdParamsSchema,
+  projectMemberUserIdParamsSchema,
   updateLabelParamsSchema,
   updateProjectMemberBodySchema,
   updateProjectMemberParamsSchema,
@@ -64,6 +68,19 @@ router.get(
   "/:projectId/members",
   validate(projectIdParamsSchema, "params"),
   getProjectMembers,
+);
+
+router.patch(
+  "/:projectId/members/:userId",
+  validate(projectMemberUserIdParamsSchema, "params"),
+  validate(patchProjectMemberBodySchema),
+  patchProjectMember,
+);
+
+router.delete(
+  "/:projectId/members/:userId",
+  validate(projectMemberUserIdParamsSchema, "params"),
+  deleteProjectMember,
 );
 
 router.get(

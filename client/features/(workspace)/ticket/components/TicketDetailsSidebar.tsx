@@ -61,7 +61,7 @@ const TicketDetailsSidebar = ({
   );
 
   return (
-    <aside className="space-y-5 rounded-xl border bg-card/70 p-5 shadow-card">
+    <aside className="h-fit space-y-5 rounded-xl border bg-card/70 p-5 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Details</h2>
         {isSaving && (
@@ -72,10 +72,7 @@ const TicketDetailsSidebar = ({
         )}
       </div>
 
-      <form
-        className="space-y-5"
-        onSubmit={(event) => event.preventDefault()}
-      >
+      <form className="space-y-5" onSubmit={(event) => event.preventDefault()}>
         <fieldset disabled={!canEdit} className="space-y-5">
           <form.AppField
             name="columnId"
@@ -165,10 +162,7 @@ const TicketDetailsSidebar = ({
             listeners={{
               onChange: ({ value }) => {
                 const assigneeId = value === "unassigned" ? null : value;
-                if (
-                  isSyncingRef.current ||
-                  assigneeId === ticket.assigneeId
-                ) {
+                if (isSyncingRef.current || assigneeId === ticket.assigneeId) {
                   return;
                 }
                 patchIfEditable({ assigneeId });
