@@ -12,22 +12,26 @@ import type {
   CreateOrganizationInput,
   JoinRequestIdParams,
   OrganizationIdParams,
+  OrganizationUserIdParams,
   ReviewJoinRequestBody,
   SearchOrganizationsQuery,
   TransferOwnershipParams,
   UpdateOrganizationInput,
+  UpdateOrganizationUserBody,
 } from "../schemas/organization.schema.js";
 import {
   createOrganizationTransaction,
   findConflictingOrganization,
   findOrganizationByName,
   getIncomingJoinRequests,
+  getOrganizationUsers,
   mapOrganizationSummary,
   mapJoinRequestSummary,
   normalizeOrgName,
   reviewJoinRequest,
   searchDiscoverableOrganizations,
   getUserJoinRequests,
+  updateOrganizationUser,
 } from "../services/organization.service.js";
 
 export const createOrganization = async (req: Request, res: Response) => {
@@ -446,6 +450,63 @@ export const reviewJoinRequestHandler = async (req: Request, res: Response) => {
       action === "approve"
         ? "Join request approved successfully"
         : "Join request declined successfully",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getOrganizationUsersHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { orgId, userId } = req.user!;
+
+    if (!orgId) {
+      return new ApiResponse(401, null, "Unauthorized").send(res);
+    }
+
+    const users = await getOrganizationUsers(orgId, userId);
+
+    return new ApiResponse(
+      200,
+      users,
+      "Organization users fetched successfully",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const updateOrganizationUserHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { orgId, userId: actorId } = req.user!;
+
+    if (!orgId) {
+      return new ApiResponse(401, null, "Unauthorized").send(res);
+    }
+
+    const { userId } = req.validated!.params as OrganizationUserIdParams;
+    const body = req.validated!.body as UpdateOrganizationUserBody;
+
+    const user = await updateOrganizationUser(orgId, actorId, userId, body);
+
+    return new ApiResponse(
+      200,
+      user,
+      "Organization user updated successfully",
     ).send(res);
   } catch (error) {
     if (error instanceof ApiError) {

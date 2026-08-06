@@ -20,6 +20,19 @@ export const getCurrentUser = () =>
     fallbackErrorMessage: "Failed to fetch current user",
   });
 
+export const updateProfile = (data: Pick<User, "username">) =>
+  apiFetch<User>("/auth/user", {
+    method: "PATCH",
+    body: data,
+    fallbackErrorMessage: "Failed to update profile",
+  });
+
+export const deleteAccount = () =>
+  apiFetch<null>("/auth/user", {
+    method: "DELETE",
+    fallbackErrorMessage: "Failed to delete account",
+  });
+
 export const getUserRoleInProject = (projectId: string) =>
   apiFetch<ProjectRole>(`/project/${projectId}/role`, {
     fallbackErrorMessage: "Failed to fetch project role",

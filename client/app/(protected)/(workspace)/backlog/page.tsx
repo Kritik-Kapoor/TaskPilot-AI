@@ -6,7 +6,7 @@ import FormDialog from "@/components/common/dialogs/FormDialog";
 import CreateTicketForm from "@/features/(workspace)/components/CreateTicketForm";
 import BacklogToolbar from "@/features/(workspace)/backlog/components/BacklogToolbar";
 import useBacklogPage from "@/features/(workspace)/backlog/hooks/useBacklogPage";
-import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { formatDisplayName } from "@/lib/utils/common";
 import { ChevronRight } from "lucide-react";
 
 const BacklogPage = () => {

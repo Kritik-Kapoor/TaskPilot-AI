@@ -6,12 +6,14 @@ import {
   getIncomingJoinRequestsHandler,
   getMyJoinRequests,
   getOrganization,
+  getOrganizationUsersHandler,
   getProjectsList,
   joinRequest,
   reviewJoinRequestHandler,
   searchOrganizations,
   transferOwnership,
   updateOrganization,
+  updateOrganizationUserHandler,
 } from "../controllers/organization.controller.js";
 import { authenticateUser } from "../middlewares/authenticateUser.middleware.js";
 import { authenticateWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
@@ -19,12 +21,14 @@ import { validate } from "../middlewares/validateSchema.middleware.js";
 import {
   checkOrganizationNameQuerySchema,
   createOrganizationSchema,
-  organizationIdParamsSchema,
   joinRequestIdParamsSchema,
+  organizationUserIdParamsSchema,
   reviewJoinRequestBodySchema,
   searchOrganizationsQuerySchema,
   transferOwnershipParamsSchema,
   updateOrganizationSchema,
+  updateOrganizationUserBodySchema,
+  organizationIdParamsSchema,
 } from "../schemas/organization.schema.js";
 
 const router = Router();
@@ -92,5 +96,15 @@ router.post(
 );
 
 router.get("/projects", authenticateWorkspaceUser, getProjectsList);
+
+router.get("/users", authenticateWorkspaceUser, getOrganizationUsersHandler);
+
+router.patch(
+  "/users/:userId",
+  authenticateWorkspaceUser,
+  validate(organizationUserIdParamsSchema, "params"),
+  validate(updateOrganizationUserBodySchema),
+  updateOrganizationUserHandler,
+);
 
 export default router;

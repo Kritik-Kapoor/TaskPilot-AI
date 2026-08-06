@@ -18,3 +18,10 @@ export const getColor = (name: string) => {
 
   return COLORS[Math.abs(hash) % COLORS.length];
 };
+
+export const formatDisplayName = (name: string) =>
+  name
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");

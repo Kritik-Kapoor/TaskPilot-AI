@@ -1,7 +1,7 @@
 import { FolderKanban, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Organization } from "@/features/(onboarding)/types";
-import { getColor } from "@/lib/utils/common";
+import { getColor, initialsOf } from "@/lib/utils/common";
 
 type Props = {
   org: Organization;
@@ -17,12 +17,6 @@ export function OrgCard({
   isLoading = false,
 }: Props) {
   const color = getColor(org.orgName);
-  const initials = org.orgName
-    .split(" ")
-    .map((word: string) => word[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 
   return (
     <div className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-card transition-all hover:border-brand/40 hover:shadow-elegant">
@@ -32,7 +26,7 @@ export function OrgCard({
           background: `linear-gradient(135deg, ${color}, ${color}cc)`,
         }}
       >
-        {initials}
+        {initialsOf(org.orgName)}
       </div>
 
       <div className="min-w-0 flex-1">

@@ -67,3 +67,19 @@ export const reviewJoinRequestBodySchema = z.object({
 
 export type JoinRequestIdParams = z.infer<typeof joinRequestIdParamsSchema>;
 export type ReviewJoinRequestBody = z.infer<typeof reviewJoinRequestBodySchema>;
+
+export const organizationUserIdParamsSchema = z.object({
+  userId: z.uuid("Invalid user ID"),
+});
+
+export const updateOrganizationUserBodySchema = z.object({
+  organizationRole: z.enum(["ADMIN", "MEMBER"]),
+  projectIds: z.array(z.uuid("Invalid project ID")),
+});
+
+export type OrganizationUserIdParams = z.infer<
+  typeof organizationUserIdParamsSchema
+>;
+export type UpdateOrganizationUserBody = z.infer<
+  typeof updateOrganizationUserBodySchema
+>;

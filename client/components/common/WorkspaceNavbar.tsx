@@ -1,19 +1,27 @@
 "use client";
 
+import Dropdown from "@/components/common/Dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { formatDisplayName, initialsOf } from "@/lib/utils/common";
 import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
-import { Bell, CircleHelp, Plus, Search } from "lucide-react";
-
-const getUserInitials = (username: string) =>
-  username.slice(0, 2).toUpperCase();
+import {
+  Bell,
+  CircleHelp,
+  LogOut,
+  Plus,
+  Search,
+  UserRound,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo } from "react";
 
 const WorkspaceNavbar = () => {
-  const { user } = useAuth();
-  const { activeProject } = useProject();
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const { activeProject, buildWorkspacePath } = useProject();
 
   const organizationName = user?.organizationName
     ? formatDisplayName(user.organizationName)
@@ -22,6 +30,35 @@ const WorkspaceNavbar = () => {
   const projectName = activeProject
     ? formatDisplayName(activeProject.projectName)
     : "Select project";
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    router.push("/sign-in");
+  }, [logout, router]);
+
+  const userMenuGroups = useMemo(
+    () => [
+      {
+        actions: [
+          {
+            label: "Profile",
+            icon: <UserRound className="size-4" />,
+            onClick: () => router.push(buildWorkspacePath("/profile")),
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: "Sign out",
+            icon: <LogOut className="size-4" />,
+            onClick: () => void handleLogout(),
+          },
+        ],
+      },
+    ],
+    [buildWorkspacePath, handleLogout, router],
+  );
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-background px-4">
@@ -65,12 +102,28 @@ const WorkspaceNavbar = () => {
           <Bell />
           <span className="absolute top-1.25 right-1.5 size-2 rounded-full bg-destructive" />
         </Button>
-        <div
-          className="grid size-8 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-brand-foreground"
-          title={user?.username}
-        >
-          {user ? getUserInitials(user.username) : "?"}
-        </div>
+        <Dropdown
+          align="end"
+          openOnHover
+          header={
+            user
+              ? {
+                  title: user.username,
+                  subtitle: user.email,
+                }
+              : undefined
+          }
+          groups={userMenuGroups}
+          trigger={
+            <button
+              type="button"
+              className="grid size-8 place-items-center rounded-full bg-gradient-brand text-xs font-semibold text-brand-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Open account menu"
+            >
+              {user ? initialsOf(user.username) : "?"}
+            </button>
+          }
+        />
       </div>
     </header>
   );

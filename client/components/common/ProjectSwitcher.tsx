@@ -14,8 +14,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getColor, initialsOf } from "@/lib/utils/common";
-import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { getColor, initialsOf, formatDisplayName } from "@/lib/utils/common";
 import { useProject } from "@/providers/projectProvider";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
@@ -142,7 +141,10 @@ const ProjectSwitcher = () => {
             {isProjectAdmin && (
               <>
                 <DropdownMenuSeparator className="my-1.5" />
-                <DropdownMenuItem className="gap-2 rounded-lg px-2 py-1" disabled>
+                <DropdownMenuItem
+                  className="gap-2 rounded-lg px-2 py-1"
+                  disabled
+                >
                   <Plus className="size-4" />
                   New project
                 </DropdownMenuItem>

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { formatDisplayName } from "@/lib/utils/common";
 import { formatTicketEnum } from "@/features/(workspace)/backlog/lib/constants";
 import { TYPE_CLASS } from "@/features/(workspace)/board/lib/constants";
 import type {

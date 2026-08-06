@@ -5,7 +5,7 @@ import CreateTicketForm from "@/features/(workspace)/components/CreateTicketForm
 import BoardColumns from "@/features/(workspace)/board/components/BoardColumns";
 import BoardToolbar from "@/features/(workspace)/board/components/BoardToolbar";
 import useBoardPage from "@/features/(workspace)/board/hooks/useBoardPage";
-import { formatDisplayName } from "@/features/(workspace)/lib/utils";
+import { formatDisplayName } from "@/lib/utils/common";
 import { ChevronRight } from "lucide-react";
 
 const BoardPage = () => {

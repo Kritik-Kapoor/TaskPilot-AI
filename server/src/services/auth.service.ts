@@ -1,4 +1,5 @@
 import { prisma } from "../config/db.js";
+import { ApiError } from "../utils/apiResponse.js";
 import type { Response } from "express";
 import {
   issueAuthTokens,
@@ -6,37 +7,83 @@ import {
   type AccessTokenPayload,
 } from "../utils/generateToken.js";
 
-export const getUserAuthPayload = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+const userAuthSelect = {
+  email: true,
+  username: true,
+  createdAt: true,
+  organizationId: true,
+  organizationRole: true,
+  organization: {
     select: {
-      email: true,
-      username: true,
-      organizationId: true,
-      organizationRole: true,
-      organization: {
+      orgName: true,
+      _count: {
         select: {
-          orgName: true,
-          _count: {
-            select: {
-              projects: true,
-            },
-          },
+          projects: true,
         },
       },
     },
+  },
+  projectMembers: {
+    select: {
+      role: true,
+      project: {
+        select: {
+          id: true,
+          projectName: true,
+        },
+      },
+    },
+    orderBy: {
+      project: {
+        projectName: "asc",
+      },
+    },
+  },
+} as const;
+
+const mapUserAuthPayload = (user: {
+  email: string;
+  username: string;
+  createdAt: Date;
+  organizationId: string | null;
+  organizationRole: "OWNER" | "ADMIN" | "MEMBER" | null;
+  organization: {
+    orgName: string;
+    _count: {
+      projects: number;
+    };
+  } | null;
+  projectMembers: Array<{
+    role: "ADMIN" | "MEMBER" | "VIEWER";
+    project: {
+      id: string;
+      projectName: string;
+    };
+  }>;
+}) => ({
+  email: user.email,
+  username: user.username,
+  joinedOn: user.createdAt.toISOString(),
+  organizationId: user.organizationId,
+  organizationRole: user.organizationRole,
+  organizationName: user.organization?.orgName ?? null,
+  organizationProjectCount: user.organization?._count.projects ?? 0,
+  projects: user.projectMembers.map((membership) => ({
+    projectId: membership.project.id,
+    projectName: membership.project.projectName,
+    role: membership.role,
+  })),
+});
+
+export const getUserAuthPayload = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: userAuthSelect,
   });
 
   if (!user) return null;
 
-  return {
-    email: user.email,
-    username: user.username,
-    organizationId: user.organizationId,
-    organizationRole: user.organizationRole,
-    organizationName: user.organization?.orgName ?? null,
-    organizationProjectCount: user.organization?._count.projects ?? 0,
-  };
+  return mapUserAuthPayload(user);
 };
 
 export const refreshAuthSession = async (
@@ -61,4 +108,37 @@ export const refreshAuthSession = async (
   issueAuthTokens(res, payload);
 
   return payload;
+};
+
+export const updateUserProfile = async (userId: string, username: string) => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { username },
+  });
+
+  const user = await getUserAuthPayload(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return user;
+};
+
+export const deleteUserAccount = async (userId: string) => {
+  const ownedOrganization = await prisma.organization.findUnique({
+    where: { ownerId: userId },
+    select: { id: true },
+  });
+
+  if (ownedOrganization) {
+    throw new ApiError(
+      403,
+      "Delete or transfer your organization before deleting your account",
+    );
+  }
+
+  await prisma.user.delete({
+    where: { id: userId },
+  });
 };

@@ -18,12 +18,20 @@ export const signinSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const updateProfileSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters long"),
+});
+
 export const getUserRoleInProjectSchema = z.object({
   projectId: projectIdParamsSchema.shape.projectId,
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
 export type SigninInput = z.infer<typeof signinSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type GetUserRoleInProjectInput = z.infer<
   typeof getUserRoleInProjectSchema
 >;

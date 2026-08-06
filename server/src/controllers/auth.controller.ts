@@ -8,10 +8,12 @@ import {
 import bcrypt from "bcryptjs";
 import { issueAuthTokens } from "../utils/generateToken.js";
 import { clearAuthCookies, REFRESH_COOKIE_NAME } from "../utils/authCookie.js";
-import type { SigninInput, SignupInput } from "../schemas/auth.schema.js";
+import type { SigninInput, SignupInput, UpdateProfileInput } from "../schemas/auth.schema.js";
 import {
   getUserAuthPayload,
   refreshAuthSession,
+  updateUserProfile,
+  deleteUserAccount,
 } from "../services/auth.service.js";
 
 export const signup = async (req: Request, res: Response) => {
@@ -119,6 +121,40 @@ export const getUser = async (req: Request, res: Response) => {
 
     return new ApiResponse(200, user, "User fetched successfully").send(res);
   } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const updateUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+    const { username } = req.validated!.body as UpdateProfileInput;
+
+    const user = await updateUserProfile(userId, username);
+
+    return new ApiResponse(200, user, "Profile updated successfully").send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+
+    await deleteUserAccount(userId);
+    clearAuthCookies(res);
+
+    return new ApiResponse(200, null, "Account deleted successfully").send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
