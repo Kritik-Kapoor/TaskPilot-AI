@@ -81,7 +81,9 @@ export function DataTable<TData extends object, TValue>({
     getRowId,
     state: {
       columnFilters,
-      ...(enableRowSelection && rowSelection !== undefined ? { rowSelection } : {}),
+      ...(enableRowSelection && rowSelection !== undefined
+        ? { rowSelection }
+        : {}),
       ...(manualPagination && page !== undefined
         ? {
             pagination: {
@@ -115,7 +117,7 @@ export function DataTable<TData extends object, TValue>({
         />
       )}
       <div
-        className={`rounded-lg border overflow-x-auto w-full sm:w-full p-3 bg-white ${mainClasses}`}
+        className={`rounded-lg border overflow-x-auto w-full sm:w-full p-3 pb-1 bg-white ${mainClasses}`}
       >
         <Table className="min-w-150 w-full table-fixed">
           <TableHeader>
@@ -211,7 +213,7 @@ export function DataTable<TData extends object, TValue>({
           </TableBody>
         </Table>
       </div>
-      {isPaginated && (
+      {table.getRowModel().rows?.length > 0 && isPaginated && (
         <Pagination
           getCanPreviousPage={
             manualPagination ? page! > 1 : table.getCanPreviousPage()

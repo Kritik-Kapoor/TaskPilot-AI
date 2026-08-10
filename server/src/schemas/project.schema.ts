@@ -92,5 +92,17 @@ export type ProjectMemberUserIdParams = z.infer<
 export type PatchProjectMemberBody = z.infer<
   typeof patchProjectMemberBodySchema
 >;
+export const projectJoinRequestIdParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  requestId: z.uuid("Invalid join request ID"),
+});
+
+export const reviewProjectJoinRequestBodySchema = z.object({
+  action: z.enum(["approve", "decline"]),
+});
+
 export type CreateLabelBody = z.infer<typeof createLabelBodySchema>;
 export type UpdateLabelParams = z.infer<typeof updateLabelParamsSchema>;
+export type ProjectJoinRequestIdParams = z.infer<
+  typeof projectJoinRequestIdParamsSchema
+>;

@@ -5,12 +5,14 @@ import { AuthContext } from "@/lib/context/authContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { logoutUser } from "@/features/(auth)/api";
 import { useCurrentUser } from "@/features/(auth)/hooks/useCurrentUser";
+import { useRouter } from "next/navigation";
 
 type Props = {
   children: React.ReactNode;
 };
 
 export function AuthProvider({ children }: Props) {
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const { data: user, isPending } = useCurrentUser();
@@ -19,11 +21,11 @@ export function AuthProvider({ children }: Props) {
     try {
       await logoutUser();
     } finally {
-      queryClient.removeQueries({
-        queryKey: ["me"],
-      });
+      await queryClient.cancelQueries({ queryKey: ["me"] });
+      queryClient.setQueryData(["me"], null);
+      router.replace("/sign-in");
     }
-  }, [queryClient]);
+  }, [queryClient, router]);
 
   const value = useMemo(
     () => ({

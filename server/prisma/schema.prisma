@@ -21,8 +21,8 @@ model User {
   organizationAsOwner     Organization?             @relation("OrganizationOwner")
   createdOrganizations    Organization[]            @relation("OrganizationCreator")
   projectMembers          ProjectMember[]
-  joinRequests            OrganizationJoinRequest[]
-  approvedJoinRequests    OrganizationJoinRequest[] @relation("ApprovedJoinRequests")
+  joinRequests            JoinRequest[]
+  approvedJoinRequests    JoinRequest[] @relation("ApprovedJoinRequests")
   createdProjects         Project[]                 @relation("ProjectCreator")
   assignedTickets         Ticket[]                  @relation("TicketAssignee")
   createdTickets          Ticket[]                  @relation("TicketCreator")
@@ -43,7 +43,7 @@ model Organization {
   createdBy    User?                     @relation("OrganizationCreator", fields: [createdById], references: [id], onDelete: SetNull)
   members      User[]                    @relation("OrganizationMembers")
   projects     Project[]
-  joinRequests OrganizationJoinRequest[]
+  joinRequests JoinRequest[]
 
   @@index([createdById])
 }
@@ -63,6 +63,7 @@ model Project {
   tickets        Ticket[]
   columns        BoardColumn[]
   labels         Label[]
+  joinRequests   JoinRequest[]
 
   @@unique([organizationId, projectName])
   @@unique([organizationId, projectKey])
@@ -137,10 +138,11 @@ model ProjectMember {
   @@index([projectId])
 }
 
-model OrganizationJoinRequest {
+model JoinRequest {
   id             String            @id @default(uuid())
   userId         String
   organizationId String
+  projectId      String?
   approvedById   String?
   approvedOn     DateTime?
   status         JoinRequestStatus @default(PENDING)
@@ -148,10 +150,12 @@ model OrganizationJoinRequest {
   updatedAt      DateTime          @updatedAt
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   approvedBy   User?        @relation("ApprovedJoinRequests", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status])
   @@index([userId, status])
+  @@index([projectId, status])
 }
 
 model Label {

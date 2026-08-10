@@ -142,6 +142,7 @@ export const getOrganization = async (req: Request, res: Response) => {
           select: {
             id: true,
             username: true,
+            email: true,
           },
         },
         createdBy: {
@@ -154,8 +155,10 @@ export const getOrganization = async (req: Request, res: Response) => {
           select: {
             id: true,
             username: true,
+            email: true,
             organizationRole: true,
           },
+          orderBy: { username: "asc" },
         },
         projects: {
           select: {
@@ -164,15 +167,13 @@ export const getOrganization = async (req: Request, res: Response) => {
             description: true,
             members: {
               select: {
-                id: true,
                 user: {
                   select: {
-                    id: true,
                     username: true,
                   },
                 },
-                role: true,
               },
+              orderBy: { createdAt: "asc" },
             },
           },
         },
@@ -182,9 +183,38 @@ export const getOrganization = async (req: Request, res: Response) => {
     if (!organization)
       return new ApiResponse(404, null, "Organization not found").send(res);
 
+    const memberPreviewByProjectId = organization.projects
+      .flatMap((project) =>
+        project.members.map((member) => ({
+          projectId: project.id,
+          user: member.user,
+        })),
+      )
+      .reduce<Record<string, Array<{ username: string }>>>((acc, member) => {
+        const preview = acc[member.projectId] ?? [];
+
+        if (preview.length < 4) {
+          preview.push({
+            username: member.user.username,
+          });
+          acc[member.projectId] = preview;
+        }
+
+        return acc;
+      }, {});
+
+    const organizationWithProjectSummaries = {
+      ...organization,
+      projects: organization.projects.map(({ members, ...project }) => ({
+        ...project,
+        memberCount: members.length,
+        memberPreview: memberPreviewByProjectId[project.id] ?? [],
+      })),
+    };
+
     return new ApiResponse(
       200,
-      organization,
+      organizationWithProjectSummaries,
       "Organization fetched successfully",
     ).send(res);
   } catch (error) {
@@ -546,10 +576,11 @@ export const joinRequest = async (req: Request, res: Response) => {
     if (!organization)
       return new ApiResponse(404, null, "Organization not found").send(res);
 
-    const pendingRequest = await prisma.organizationJoinRequest.findFirst({
+    const pendingRequest = await prisma.joinRequest.findFirst({
       where: {
         userId,
         organizationId,
+        projectId: null,
         status: "PENDING",
       },
       select: { id: true },
@@ -563,7 +594,7 @@ export const joinRequest = async (req: Request, res: Response) => {
       ).send(res);
     }
 
-    await prisma.organizationJoinRequest.create({
+    await prisma.joinRequest.create({
       data: {
         userId,
         organizationId,
@@ -592,19 +623,70 @@ export const getProjectsList = async (req: Request, res: Response) => {
         projectName: true,
         projectKey: true,
         description: true,
+        _count: {
+          select: { members: true, tickets: true },
+        },
         members: {
-          where: { userId },
-          select: { role: true },
+          select: {
+            userId: true,
+            role: true,
+            user: {
+              select: {
+                username: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+        joinRequests: {
+          where: {
+            userId,
+            status: { in: ["PENDING", "DECLINED"] },
+          },
+          select: { status: true },
+          orderBy: { createdAt: "desc" },
           take: 1,
         },
       },
     });
 
-    const projectsWithMembership = projects.map(({ members, ...project }) => ({
-      ...project,
-      isJoined: members.length > 0,
-      role: members[0]?.role ?? null,
-    }));
+    const memberPreviewByProjectId = projects
+      .flatMap((project) =>
+        project.members.map((member) => ({
+          projectId: project.id,
+          user: member.user,
+        })),
+      )
+      .reduce<Record<string, Array<{ username: string }>>>((acc, member) => {
+        const preview = acc[member.projectId] ?? [];
+
+        if (preview.length < 4) {
+          preview.push({
+            username: member.user.username,
+          });
+          acc[member.projectId] = preview;
+        }
+
+        return acc;
+      }, {});
+
+    const projectsWithMembership = projects.map(
+      ({ members, _count, joinRequests, ...project }) => {
+        const userMembership = members.find(
+          (member) => member.userId === userId,
+        );
+
+        return {
+          ...project,
+          memberCount: _count.members,
+          ticketCount: _count.tickets,
+          memberPreview: memberPreviewByProjectId[project.id] ?? [],
+          isJoined: Boolean(userMembership),
+          role: userMembership?.role ?? null,
+          joinRequestStatus: joinRequests[0]?.status ?? null,
+        };
+      },
+    );
 
     return new ApiResponse(
       200,

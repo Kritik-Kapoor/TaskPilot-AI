@@ -5,13 +5,14 @@ import {
   requestJoinOrganization,
   searchOrganizations,
 } from "@/features/(onboarding)/api";
-import type {
-  JoinRequestStatus,
-  Organization,
-} from "@/features/(onboarding)/types";
+import {
+  buildJoinRequestStatusByOrgId,
+  dedupeJoinRequestsByOrganization,
+} from "@/features/(onboarding)/lib/joinRequestUtils";
+import type { Organization } from "@/features/(onboarding)/types";
 import { useDebounced } from "@/lib/hooks/useDebounced";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const useJoinOrgPage = () => {
@@ -45,12 +46,18 @@ const useJoinOrgPage = () => {
   const isSearchingOrganizations =
     Boolean(debouncedQuery.trim()) && searchedOrganizationsIsPending;
 
-  const joinRequestStatusByOrgId = myJoinRequests.reduce<
-    Record<string, JoinRequestStatus>
-  >((acc, request) => {
-    acc[request.organization.id] = request.status;
-    return acc;
-  }, {});
+  const joinRequestStatusByOrgId = useMemo(
+    () => buildJoinRequestStatusByOrgId(myJoinRequests),
+    [myJoinRequests],
+  );
+
+  const myJoinRequestsByOrganization = useMemo(
+    () => dedupeJoinRequestsByOrganization(myJoinRequests),
+    [myJoinRequests],
+  );
+
+  const getOrgJoinRequestStatus = (organizationId: string) =>
+    joinRequestStatusByOrgId[organizationId];
 
   const requestJoinMutation = useMutation({
     mutationFn: requestJoinOrganization,
@@ -71,14 +78,11 @@ const useJoinOrgPage = () => {
     requestJoinMutation.mutate(organization.id);
   };
 
-  const getOrgJoinRequestStatus = (organizationId: string) =>
-    joinRequestStatusByOrgId[organizationId];
-
   return {
     state: {
       query,
       searchedOrganizations,
-      myJoinRequests,
+      myJoinRequests: myJoinRequestsByOrganization,
       isSearching: isSearchingOrganizations,
       isLoadingJoinRequests: myJoinRequestsIsPending,
       joinRequestsError: myJoinRequestsIsError,

@@ -4,7 +4,6 @@ import { useAppForm } from "@/components/common/form/hooks";
 import { deleteAccount, updateProfile } from "@/features/(auth)/api";
 import useAuth from "@/lib/hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -18,7 +17,6 @@ const profileSchema = z.object({
 });
 
 const useProfilePage = () => {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isLoading, logout } = useAuth();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -39,9 +37,7 @@ const useProfilePage = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteAccount,
     onSuccess: async () => {
-      queryClient.removeQueries({ queryKey: ["me"] });
       await logout();
-      router.push("/sign-in");
       toast.success("Account deleted");
     },
     onError: (error) => {

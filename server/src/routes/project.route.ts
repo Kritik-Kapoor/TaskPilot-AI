@@ -4,12 +4,15 @@ import {
   createProject,
   deleteProject,
   deleteProjectMember,
+  getIncomingProjectJoinRequestsHandler,
   getLabels,
   getProject,
   getProjectBoardColumns,
   getProjectMembers,
   getUserRoleInProject,
   patchProjectMember,
+  reviewProjectJoinRequestHandler,
+  sendProjectJoinRequestHandler,
   updateLabel,
   updateProject,
   updateProjectMember,
@@ -20,7 +23,9 @@ import {
   createProjectSchema,
   patchProjectMemberBodySchema,
   projectIdParamsSchema,
+  projectJoinRequestIdParamsSchema,
   projectMemberUserIdParamsSchema,
+  reviewProjectJoinRequestBodySchema,
   updateLabelParamsSchema,
   updateProjectMemberBodySchema,
   updateProjectMemberParamsSchema,
@@ -107,6 +112,25 @@ router.get(
   "/:projectId/labels",
   validate(projectIdParamsSchema, "params"),
   getLabels,
+);
+
+router.post(
+  "/:projectId/join-request",
+  validate(projectIdParamsSchema, "params"),
+  sendProjectJoinRequestHandler,
+);
+
+router.get(
+  "/:projectId/join-requests",
+  validate(projectIdParamsSchema, "params"),
+  getIncomingProjectJoinRequestsHandler,
+);
+
+router.patch(
+  "/:projectId/join-requests/:requestId",
+  validate(projectJoinRequestIdParamsSchema, "params"),
+  validate(reviewProjectJoinRequestBodySchema),
+  reviewProjectJoinRequestHandler,
 );
 
 export default router;

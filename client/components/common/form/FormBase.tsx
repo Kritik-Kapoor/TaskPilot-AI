@@ -24,6 +24,22 @@ type FormBaseProps = FormControlProps & {
   controlFirst?: boolean;
 };
 
+const bracketSegmentPattern = /^(\([^)]*\)|\[[^\]]*\]|\{[^}]*\})$/;
+
+const renderLabelWithDescriptiveTextInBrackets = (label: string) =>
+  label
+    .split(/(\([^)]*\)|\[[^\]]*\]|\{[^}]*\})/g)
+    .filter((part) => part.length > 0)
+    .map((part, index) =>
+      bracketSegmentPattern.test(part) ? (
+        <span key={index} className="font-normal text-muted-foreground">
+          {part}
+        </span>
+      ) : (
+        part
+      ),
+    );
+
 export function FormBase({
   children,
   label,
@@ -65,7 +81,7 @@ export function FormBase({
   const labelElement = (
     <>
       <FieldLabel htmlFor={field.name}>
-        {label}
+        {renderLabelWithDescriptiveTextInBrackets(label)}
         {optional && <span className="text-muted-foreground"> (optional)</span>}
       </FieldLabel>
       {description && <FieldDescription>{description}</FieldDescription>}

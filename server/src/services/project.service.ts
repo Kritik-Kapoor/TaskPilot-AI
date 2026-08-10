@@ -201,3 +201,189 @@ export const normalizeProjectMemberObject = ({
   username: user.username,
   email: user.email,
 });
+
+import { ApiError } from "../utils/apiResponse.js";
+
+const projectJoinRequestSelect = {
+  id: true,
+  status: true,
+  createdAt: true,
+  user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+    },
+  },
+} as const;
+
+const mapProjectJoinRequest = (request: {
+  id: string;
+  status: "PENDING" | "APPROVED" | "DECLINED";
+  createdAt: Date;
+  user: { id: string; username: string; email: string };
+}) => ({
+  id: request.id,
+  status: request.status,
+  requestedOn: request.createdAt.toISOString(),
+  user: request.user,
+});
+
+const assertIsProjectAdmin = async (projectId: string, userId: string) => {
+  const member = await prisma.projectMember.findUnique({
+    where: { userId_projectId: { userId, projectId } },
+    select: { role: true },
+  });
+
+  if (!member || member.role !== "ADMIN") {
+    throw new ApiError(403, "Only project admins can manage join requests");
+  }
+
+  return member;
+};
+
+export const sendProjectJoinRequest = async (
+  userId: string,
+  projectId: string,
+) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      organizationId: true,
+      members: {
+        where: { userId },
+        select: { role: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (!project) throw new ApiError(404, "Project not found");
+
+  if (project.members.length > 0) {
+    throw new ApiError(400, "You are already a member of this project");
+  }
+
+  const userInOrg = await prisma.user.findFirst({
+    where: { id: userId, organizationId: project.organizationId },
+    select: { id: true },
+  });
+
+  if (!userInOrg)
+    throw new ApiError(403, "You are not a member of this organization");
+
+  const existing = await prisma.joinRequest.findFirst({
+    where: { userId, projectId, status: "PENDING" },
+    select: { id: true },
+  });
+
+  if (existing) {
+    throw new ApiError(
+      409,
+      "You already have a pending join request for this project",
+    );
+  }
+
+  await prisma.joinRequest.create({
+    data: { userId, organizationId: project.organizationId, projectId },
+  });
+};
+
+export const getIncomingProjectJoinRequests = async (
+  projectId: string,
+  userId: string,
+) => {
+  await assertIsProjectAdmin(projectId, userId);
+
+  const requests = await prisma.joinRequest.findMany({
+    where: { projectId },
+    select: projectJoinRequestSelect,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return requests.map(mapProjectJoinRequest);
+};
+
+export const reviewProjectJoinRequest = async (
+  projectId: string,
+  reviewerId: string,
+  requestId: string,
+  action: "approve" | "decline",
+) => {
+  await assertIsProjectAdmin(projectId, reviewerId);
+
+  const joinRequest = await prisma.joinRequest.findFirst({
+    where: { id: requestId, projectId },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+      organizationId: true,
+      user: { select: { id: true } },
+    },
+  });
+
+  if (!joinRequest) throw new ApiError(404, "Join request not found");
+
+  if (joinRequest.status !== "PENDING") {
+    throw new ApiError(400, "This join request has already been reviewed");
+  }
+
+  if (action === "decline") {
+    const updated = await prisma.joinRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "DECLINED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+      select: projectJoinRequestSelect,
+    });
+
+    return mapProjectJoinRequest(updated);
+  }
+
+  const alreadyMember = await prisma.projectMember.findUnique({
+    where: {
+      userId_projectId: { userId: joinRequest.userId, projectId },
+    },
+    select: { role: true },
+  });
+
+  if (alreadyMember) {
+    throw new ApiError(400, "This user is already a member of the project");
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.projectMember.create({
+      data: { userId: joinRequest.userId, projectId, role: "MEMBER" },
+    });
+
+    await tx.joinRequest.updateMany({
+      where: {
+        userId: joinRequest.userId,
+        projectId,
+        status: "PENDING",
+        NOT: { id: requestId },
+      },
+      data: {
+        status: "DECLINED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+    });
+
+    return tx.joinRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "APPROVED",
+        approvedById: reviewerId,
+        approvedOn: new Date(),
+      },
+      select: projectJoinRequestSelect,
+    });
+  });
+
+  return mapProjectJoinRequest(updated);
+};

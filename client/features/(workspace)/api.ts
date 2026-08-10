@@ -41,3 +41,27 @@ export const getProjectLabels = (projectId: string) =>
   apiFetch<ProjectLabel[]>(`/project/${projectId}/labels`, {
     fallbackErrorMessage: "Failed to fetch project labels",
   });
+
+export type UpdateProjectPayload = {
+  name?: string;
+  description?: string | null;
+};
+
+export const updateProject = (projectId: string, payload: UpdateProjectPayload) =>
+  apiFetch<Project>(`/project/${projectId}`, {
+    method: "PATCH",
+    body: payload,
+    fallbackErrorMessage: "Failed to update project",
+  });
+
+export const deleteProject = (projectId: string) =>
+  apiFetch<null>(`/project/${projectId}`, {
+    method: "DELETE",
+    fallbackErrorMessage: "Failed to delete project",
+  });
+
+export const sendProjectJoinRequest = (projectId: string) =>
+  apiFetch<null>(`/project/${projectId}/join-request`, {
+    method: "POST",
+    fallbackErrorMessage: "Failed to send join request",
+  });

@@ -2,13 +2,25 @@
 
 import { getUserRoleInProject } from "@/features/(auth)/api";
 import type { ProjectRole } from "@/features/(auth)/types";
-import { getProjectLabels, getProjectMembers, getProjects } from "@/features/(workspace)/api";
+import {
+  getProjectLabels,
+  getProjectMembers,
+  getProjects,
+} from "@/features/(workspace)/api";
 import {
   getProjectIdFromParams,
   PROJECT_ID_PARAM,
   withProjectId,
 } from "@/features/(workspace)/lib/projectUrl";
-import type { Project, ProjectLabel, ProjectMember } from "@/features/(workspace)/types";
+import {
+  isOrgAccessiblePath,
+  isProjectScopedPath,
+} from "@/features/(workspace)/lib/workspaceRoutes";
+import type {
+  Project,
+  ProjectLabel,
+  ProjectMember,
+} from "@/features/(workspace)/types";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -25,6 +37,8 @@ const PROJECT_ROLES: ProjectRole[] = ["ADMIN", "MEMBER", "VIEWER"];
 
 type ProjectContextType = {
   projects: Project[];
+  joinedProjects: Project[];
+  hasJoinedProjects: boolean;
   activeProject: Project | null;
   projectMembers: ProjectMember[] | undefined;
   projectLabels: ProjectLabel[];
@@ -63,22 +77,31 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     queryFn: getProjects,
   });
 
+  const joinedProjects = useMemo(
+    () => projects.filter((project) => project.isJoined),
+    [projects],
+  );
+
+  const hasJoinedProjects = joinedProjects.length > 0;
+
   const resolvedProjectId = useMemo(() => {
-    if (!projects.length) return urlProjectId;
+    if (!hasJoinedProjects) return null;
 
     if (
       urlProjectId &&
-      projects.some((project) => project.id === urlProjectId)
+      joinedProjects.some((project) => project.id === urlProjectId)
     ) {
       return urlProjectId;
     }
 
-    return projects[0].id;
-  }, [projects, urlProjectId]);
+    return joinedProjects[0]?.id ?? null;
+  }, [hasJoinedProjects, joinedProjects, urlProjectId]);
 
   const activeProject = useMemo(
-    () => projects.find((project) => project.id === resolvedProjectId) ?? null,
-    [projects, resolvedProjectId],
+    () =>
+      joinedProjects.find((project) => project.id === resolvedProjectId) ??
+      null,
+    [joinedProjects, resolvedProjectId],
   );
 
   const placeholderRole = useMemo(() => {
@@ -98,17 +121,15 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   } = useQuery({
     queryKey: ["project-members", resolvedProjectId],
     queryFn: () => getProjectMembers(resolvedProjectId!),
-    enabled: !!resolvedProjectId,
+    enabled: Boolean(resolvedProjectId),
   });
 
-  const {
-    data: projectLabels = [],
-    isPending: isProjectLabelsPending,
-  } = useQuery({
-    queryKey: ["project-labels", resolvedProjectId],
-    queryFn: () => getProjectLabels(resolvedProjectId!),
-    enabled: !!resolvedProjectId,
-  });
+  const { data: projectLabels = [], isPending: isProjectLabelsPending } =
+    useQuery({
+      queryKey: ["project-labels", resolvedProjectId],
+      queryFn: () => getProjectLabels(resolvedProjectId!),
+      enabled: Boolean(resolvedProjectId),
+    });
 
   const {
     data: projectRole = placeholderRole,
@@ -119,12 +140,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   } = useQuery({
     queryKey: ["project-role", resolvedProjectId],
     queryFn: () => getUserRoleInProject(resolvedProjectId!),
-    enabled: !!resolvedProjectId,
+    enabled: Boolean(resolvedProjectId),
     placeholderData: placeholderRole,
   });
 
   useEffect(() => {
-    if (isProjectsPending || !resolvedProjectId) return;
+    if (isProjectsPending || isOrgAccessiblePath(pathname)) return;
+    if (!isProjectScopedPath(pathname) || !resolvedProjectId) return;
     if (urlProjectId === resolvedProjectId) return;
 
     const params = new URLSearchParams(searchParams.toString());
@@ -141,31 +163,40 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const handleSetActiveProjectId = useCallback(
     (projectId: string) => {
-      if (!projects.some((project) => project.id === projectId)) return;
+      if (!joinedProjects.some((project) => project.id === projectId)) return;
+      if (!isProjectScopedPath(pathname)) return;
 
       const params = new URLSearchParams(searchParams.toString());
       params.set(PROJECT_ID_PARAM, projectId);
       router.replace(`${pathname}?${params.toString()}`);
     },
-    [pathname, projects, router, searchParams],
+    [joinedProjects, pathname, router, searchParams],
   );
 
   const buildWorkspacePath = useCallback(
-    (path: string) =>
-      resolvedProjectId ? withProjectId(path, resolvedProjectId) : path,
+    (path: string) => {
+      if (isOrgAccessiblePath(path)) return path;
+      return resolvedProjectId ? withProjectId(path, resolvedProjectId) : path;
+    },
     [resolvedProjectId],
   );
 
-  const hasCriticalError = isProjectsError || isProjectMembersError;
+  const hasCriticalError =
+    isProjectsError || (hasJoinedProjects && isProjectMembersError);
 
   const showRoleWarning =
-    !hasCriticalError && !!resolvedProjectId && isProjectRoleError;
+    hasJoinedProjects &&
+    !hasCriticalError &&
+    !!resolvedProjectId &&
+    isProjectRoleError;
 
   const effectiveProjectRole = showRoleWarning ? "VIEWER" : projectRole;
 
   const value = useMemo(
     () => ({
       projects,
+      joinedProjects,
+      hasJoinedProjects,
       activeProject,
       projectMembers,
       projectLabels,
@@ -186,11 +217,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       buildWorkspacePath,
       effectiveProjectRole,
       handleSetActiveProjectId,
+      hasJoinedProjects,
       isProjectLabelsPending,
       isProjectMembersPending,
       isProjectRoleFetching,
       isProjectRolePending,
       isProjectsPending,
+      joinedProjects,
       projectLabels,
       projectMembers,
       projects,
@@ -211,7 +244,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isProjectMembersError) {
+  if (hasJoinedProjects && isProjectMembersError) {
     return (
       <ProjectProviderFatalError
         title="Couldn't load project members"

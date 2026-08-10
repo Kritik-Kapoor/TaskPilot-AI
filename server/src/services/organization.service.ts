@@ -69,9 +69,10 @@ export const searchDiscoverableOrganizations = (query: string) =>
   });
 
 export const getUserJoinRequests = (userId: string) =>
-  prisma.organizationJoinRequest.findMany({
+  prisma.joinRequest.findMany({
     where: {
       userId,
+      projectId: null,
       status: {
         in: ["PENDING", "DECLINED"],
       },
@@ -167,8 +168,8 @@ export const getIncomingJoinRequests = async (
 ) => {
   await assertCanManageOrg(orgId, userId);
 
-  const joinRequests = await prisma.organizationJoinRequest.findMany({
-    where: { organizationId: orgId },
+  const joinRequests = await prisma.joinRequest.findMany({
+    where: { organizationId: orgId, projectId: null },
     select: incomingJoinRequestSelect,
     orderBy: { createdAt: "desc" },
   });
@@ -184,10 +185,11 @@ export const reviewJoinRequest = async (
 ) => {
   await assertCanManageOrg(orgId, reviewerId);
 
-  const joinRequest = await prisma.organizationJoinRequest.findFirst({
+  const joinRequest = await prisma.joinRequest.findFirst({
     where: {
       id: requestId,
       organizationId: orgId,
+      projectId: null,
     },
     select: {
       id: true,
@@ -211,7 +213,7 @@ export const reviewJoinRequest = async (
   }
 
   if (action === "decline") {
-    const updated = await prisma.organizationJoinRequest.update({
+    const updated = await prisma.joinRequest.update({
       where: { id: requestId },
       data: {
         status: "DECLINED",
@@ -237,9 +239,10 @@ export const reviewJoinRequest = async (
       },
     });
 
-    await tx.organizationJoinRequest.updateMany({
+    await tx.joinRequest.updateMany({
       where: {
         userId: joinRequest.userId,
+        projectId: null,
         status: "PENDING",
         NOT: { id: requestId },
       },
@@ -250,7 +253,7 @@ export const reviewJoinRequest = async (
       },
     });
 
-    return tx.organizationJoinRequest.update({
+    return tx.joinRequest.update({
       where: { id: requestId },
       data: {
         status: "APPROVED",
@@ -486,6 +489,17 @@ export const updateOrganizationUser = async (
           projectId,
           role: "MEMBER" as const,
         })),
+      });
+
+      // Auto-approve any pending project join requests for the newly added projects
+      // don't fill approvedById / approvedOn as it was an admin manual action
+      await tx.joinRequest.updateMany({
+        where: {
+          userId,
+          projectId: { in: projectIdsToAdd },
+          status: "PENDING",
+        },
+        data: { status: "APPROVED" },
       });
     }
   });

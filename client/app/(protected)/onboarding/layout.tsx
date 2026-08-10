@@ -7,11 +7,13 @@ import {
   getOnboardingStepIndex,
 } from "@/features/(onboarding)/constants";
 import { PROJECT_NAME } from "@/lib/constants/utils";
+import useAuth from "@/lib/hooks/useAuth";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const OnboardingLayout = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
+  const { logout } = useAuth();
   const isJoinOrgPage = pathname.includes("/join-org");
   const activeIndex = getOnboardingStepIndex(pathname);
 
@@ -28,12 +30,13 @@ const OnboardingLayout = ({ children }: { children: React.ReactNode }) => {
                 {PROJECT_NAME}
               </span>
             </Link>
-            <Link
-              href="/sign-in"
+            <button
+              type="button"
+              onClick={() => void logout()}
               className="text-sm text-muted-foreground hover:text-foreground"
             >
               Sign out
-            </Link>
+            </button>
           </div>
         </header>
 

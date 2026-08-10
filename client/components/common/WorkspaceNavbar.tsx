@@ -16,12 +16,12 @@ import {
   UserRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 
 const WorkspaceNavbar = () => {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { activeProject, buildWorkspacePath } = useProject();
+  const { activeProject } = useProject();
 
   const organizationName = user?.organizationName
     ? formatDisplayName(user.organizationName)
@@ -31,11 +31,6 @@ const WorkspaceNavbar = () => {
     ? formatDisplayName(activeProject.projectName)
     : "Select project";
 
-  const handleLogout = useCallback(async () => {
-    await logout();
-    router.push("/sign-in");
-  }, [logout, router]);
-
   const userMenuGroups = useMemo(
     () => [
       {
@@ -43,7 +38,7 @@ const WorkspaceNavbar = () => {
           {
             label: "Profile",
             icon: <UserRound className="size-4" />,
-            onClick: () => router.push(buildWorkspacePath("/profile")),
+            onClick: () => router.push("/profile"),
           },
         ],
       },
@@ -52,12 +47,12 @@ const WorkspaceNavbar = () => {
           {
             label: "Sign out",
             icon: <LogOut className="size-4" />,
-            onClick: () => void handleLogout(),
+            onClick: () => logout(),
           },
         ],
       },
     ],
-    [buildWorkspacePath, handleLogout, router],
+    [logout, router],
   );
 
   return (

@@ -10,6 +10,7 @@ import type {
   CreateProjectInput,
   PatchProjectMemberBody,
   ProjectIdParams,
+  ProjectJoinRequestIdParams,
   ProjectMemberUserIdParams,
   UpdateLabelParams,
   UpdateProjectInput,
@@ -24,10 +25,13 @@ import {
   DUPLICATE_PROJECT_NAME_MESSAGE,
   findConflictingProject,
   findProjectInOrg,
+  getIncomingProjectJoinRequests,
   getOrgMember,
   getProjectMembership,
   isDuplicateNameError,
   normalizeProjectMemberObject,
+  reviewProjectJoinRequest,
+  sendProjectJoinRequest,
   updateProjectDetails,
 } from "../services/project.service.js";
 import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
@@ -768,6 +772,80 @@ export const getLabels = async (req: Request, res: Response) => {
       res,
     );
   } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const sendProjectJoinRequestHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { userId } = req.user!;
+    const { projectId } = req.validated!.params as ProjectIdParams;
+
+    await sendProjectJoinRequest(userId, projectId);
+
+    return new ApiResponse(200, null, "Join request sent successfully").send(
+      res,
+    );
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const getIncomingProjectJoinRequestsHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { userId } = req.user!;
+    const { projectId } = req.validated!.params as ProjectIdParams;
+
+    const requests = await getIncomingProjectJoinRequests(projectId, userId);
+
+    return new ApiResponse(
+      200,
+      requests,
+      "Incoming project join requests fetched successfully",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const reviewProjectJoinRequestHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { userId } = req.user!;
+    const { projectId, requestId } = req.validated!
+      .params as ProjectJoinRequestIdParams;
+    const { action } = req.validated!.body as { action: "approve" | "decline" };
+
+    const request = await reviewProjectJoinRequest(
+      projectId,
+      userId,
+      requestId,
+      action,
+    );
+
+    return new ApiResponse(
+      200,
+      request,
+      action === "approve" ? "Join request approved" : "Join request declined",
+    ).send(res);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

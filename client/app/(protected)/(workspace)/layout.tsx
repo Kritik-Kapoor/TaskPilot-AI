@@ -3,6 +3,7 @@
 import { AppSidebar } from "@/components/common/Sidebar";
 import ProjectRoleWarningBannerSlot from "@/components/common/ProjectRoleWarningBannerSlot";
 import WorkspaceNavbar from "@/components/common/WorkspaceNavbar";
+import ProjectMembershipGuard from "@/components/guards/ProjectMembershipGuard";
 import DashboardGuard from "@/components/guards/DashboardGuard";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,7 +22,7 @@ const WorkspaceLayout = ({ children }: { children: React.ReactNode }) => {
                 <ProjectRoleWarningBannerSlot />
                 <WorkspaceNavbar />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6">
-                  {children}
+                  <ProjectMembershipGuard>{children}</ProjectMembershipGuard>
                 </div>
               </SidebarInset>
             </SidebarProvider>

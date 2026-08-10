@@ -13,11 +13,11 @@ const JOIN_REQUEST_STATUS_MESSAGES: Record<
   { message: string; className: string }
 > = {
   PENDING: {
-    message: "Request sent — an admin will review shortly.",
+    message: "Request sent. An admin will review it shortly.",
     className: "text-success",
   },
   DECLINED: {
-    message: "Your request was declined. You can send a new request below.",
+    message: "Your request was declined. You can send a new request.",
     className: "text-destructive",
   },
   APPROVED: {
@@ -29,7 +29,7 @@ const JOIN_REQUEST_STATUS_MESSAGES: Record<
 const getOrgCardAction = (
   status: JoinRequestStatus | undefined,
 ): "join" | "requested" | "declined" => {
-  if (status === "PENDING") {
+  if (status === "PENDING" || status === "APPROVED") {
     return "requested";
   }
 
@@ -105,34 +105,38 @@ const JoinOrgPage = () => {
           </div>
         )}
 
-        {!query.trim() && !isLoadingJoinRequests && myJoinRequests.length > 0 && (
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-sm font-medium text-foreground">
-                Your join requests
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Organizations you&apos;ve requested to join and their status.
-              </p>
-            </div>
-
-            {myJoinRequests.map((request) => (
-              <div key={request.id}>
-                <OrgCard
-                  org={request.organization}
-                  action={
-                    request.status === "PENDING" ? "requested" : "declined"
-                  }
-                />
-                <p
-                  className={`mt-1.5 ml-1 text-xs ${JOIN_REQUEST_STATUS_MESSAGES[request.status].className}`}
-                >
-                  {JOIN_REQUEST_STATUS_MESSAGES[request.status].message}
+        {!query.trim() &&
+          !isLoadingJoinRequests &&
+          myJoinRequests.length > 0 && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-medium text-foreground">
+                  Your join requests
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Organizations you&apos;ve requested to join and their status.
                 </p>
               </div>
-            ))}
-          </div>
-        )}
+
+              {myJoinRequests.map((request) => {
+                const action =
+                  request.status === "PENDING" || request.status === "APPROVED"
+                    ? "requested"
+                    : "declined";
+
+                return (
+                  <div key={request.organization.id}>
+                    <OrgCard org={request.organization} action={action} />
+                    <p
+                      className={`mt-1.5 ml-1 text-xs ${JOIN_REQUEST_STATUS_MESSAGES[request.status].className}`}
+                    >
+                      {JOIN_REQUEST_STATUS_MESSAGES[request.status].message}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
         {searchError && (
           <div className="rounded-xl border border-dashed border-red-500 bg-red-50 p-8 text-center">

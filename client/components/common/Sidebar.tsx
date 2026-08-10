@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ProjectSwitcher from "@/components/common/ProjectSwitcher";
+import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
 import {
   Sidebar,
@@ -18,11 +19,14 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import {
+  Building2,
+  FolderKanban,
   Inbox,
   LayoutDashboard,
   List,
   Settings,
   SquareKanban,
+  User,
   UserCog,
   UserPlus,
   Users,
@@ -34,17 +38,36 @@ const WORKSPACE_NAV = [
   { title: "Backlog", href: "/backlog", icon: List },
   { title: "Inbox", href: "/inbox", icon: Inbox },
   { title: "Members", href: "/members", icon: Users },
-  { title: "Settings", href: "/settings", icon: Settings },
 ] as const;
 
-const ADMIN_NAV = [
-  { title: "Join Request", href: "/join-request", icon: UserPlus },
+const PROJECT_ADMIN_NAV = [
+  { title: "Settings", href: "/settings", icon: Settings },
+  {
+    title: "Project Join Requests",
+    href: "/project-join-request",
+    icon: UserPlus,
+  },
+] as const;
+
+const ORG_NAV = [
+  { title: "Projects", href: "/projects", icon: FolderKanban },
+  { title: "Organization", href: "/organization", icon: Building2 },
+  { title: "Profile", href: "/profile", icon: User },
+] as const;
+
+const ORG_ADMIN_NAV = [
+  { title: "Join Requests", href: "/join-request", icon: UserPlus },
   { title: "User Management", href: "/user-management", icon: UserCog },
 ] as const;
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { isProjectAdmin, buildWorkspacePath } = useProject();
+  const { user } = useAuth();
+  const { isProjectAdmin, hasJoinedProjects, buildWorkspacePath } =
+    useProject();
+
+  const isOrgAdmin =
+    user?.organizationRole === "OWNER" || user?.organizationRole === "ADMIN";
 
   return (
     <Sidebar collapsible="icon">
@@ -53,34 +76,12 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {WORKSPACE_NAV.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.href}
-                    tooltip={item.title}
-                  >
-                    <Link href={buildWorkspacePath(item.href)}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {isProjectAdmin && (
+        {hasJoinedProjects ? (
           <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {ADMIN_NAV.map((item) => (
+                {WORKSPACE_NAV.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       asChild
@@ -88,6 +89,76 @@ export function AppSidebar() {
                       tooltip={item.title}
                     >
                       <Link href={buildWorkspacePath(item.href)}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupLabel>Organization</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {ORG_NAV.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {isProjectAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Project Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {PROJECT_ADMIN_NAV.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.title}
+                    >
+                      <Link href={buildWorkspacePath(item.href)}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {isOrgAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Organization Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {ORG_ADMIN_NAV.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.title}
+                    >
+                      <Link href={item.href}>
                         <item.icon />
                         <span>{item.title}</span>
                       </Link>

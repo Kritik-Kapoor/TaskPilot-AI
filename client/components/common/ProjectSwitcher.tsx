@@ -42,11 +42,12 @@ const ProjectAvatar = ({
 
 const ProjectSwitcher = () => {
   const {
-    projects,
+    joinedProjects,
     activeProject,
     handleSetActiveProjectId,
     isLoading,
     isProjectAdmin,
+    hasJoinedProjects,
   } = useProject();
 
   if (isLoading) {
@@ -59,7 +60,7 @@ const ProjectSwitcher = () => {
     );
   }
 
-  if (!activeProject) {
+  if (!hasJoinedProjects || !activeProject) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
@@ -110,7 +111,7 @@ const ProjectSwitcher = () => {
             <DropdownMenuLabel className="px-2 py-1.5 text-xs text-muted-foreground font-semibold">
               Switch project
             </DropdownMenuLabel>
-            {projects.map((project) => {
+            {joinedProjects.map((project) => {
               const name = formatDisplayName(project.projectName);
               const isActive = project.id === activeProject.id;
 
