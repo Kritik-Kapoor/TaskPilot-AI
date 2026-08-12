@@ -24,7 +24,8 @@ export const optionalDescriptionSchema = z
   .string()
   .trim()
   .superRefine(validateDescriptionLength)
-  .transform((value) => value || undefined);
+  .transform((value) => value || undefined)
+  .optional();
 
 export const updateDescriptionSchema = z
   .string()

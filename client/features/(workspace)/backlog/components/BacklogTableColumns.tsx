@@ -3,12 +3,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { getColor, initialsOf } from "@/lib/utils/common";
+import { getColor, initialsOf, issueTypeBadgeStyle } from "@/lib/utils/common";
 import { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { PRIORITY_CLASS, TYPE_CLASS } from "../../board/lib/constants";
+import { PRIORITY_CLASS } from "../../board/lib/constants";
 import type { Ticket } from "../../board/types";
-import { formatTicketEnum } from "../lib/constants";
 
 export const createBacklogTableColumns = (
   getTicketHref: (ticketId: string) => string,
@@ -73,21 +72,23 @@ export const createBacklogTableColumns = (
       ),
     },
     {
-      accessorKey: "type",
+      accessorKey: "issueType",
       header: "Type",
       size: 100,
       maxSize: 100,
-      cell: ({ row }) => (
-        <Badge
-          variant="outline"
-          className={cn(
-            "border text-[10px] uppercase",
-            TYPE_CLASS[row.original.type],
-          )}
-        >
-          {formatTicketEnum(row.original.type)}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const issueType = row.original.issueType;
+        if (!issueType) return null;
+        return (
+          <Badge
+            variant="outline"
+            className="border text-[10px] uppercase"
+            style={issueTypeBadgeStyle(issueType.color)}
+          >
+            {issueType.key}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "priority",
@@ -98,7 +99,7 @@ export const createBacklogTableColumns = (
         <span
           className={cn("font-medium", PRIORITY_CLASS[row.original.priority])}
         >
-          {formatTicketEnum(row.original.priority)}
+          {row.original.priority}
         </span>
       ),
     },

@@ -3,6 +3,12 @@ import type { JSONContent } from "@tiptap/core";
 import type { Ticket, TicketDetail } from "../board/types";
 import type { TicketComment, UpdateTicketPayload } from "./types";
 
+export const ticketQueryKey = (projectId: string, ticketId: string) =>
+  ["ticket", projectId, ticketId] as const;
+
+export const commentsQueryKey = (projectId: string, ticketId: string) =>
+  ["ticket-comments", projectId, ticketId] as const;
+
 export const getTicketById = (projectId: string, ticketId: string) =>
   apiFetch<TicketDetail>(`/ticket/${projectId}/${ticketId}`, {
     fallbackErrorMessage: "Failed to fetch ticket",

@@ -1,27 +1,20 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getColor, initialsOf } from "@/lib/utils/common";
+import { capitalizeFirstChar, getColor, initialsOf } from "@/lib/utils/common";
 import { Loader2 } from "lucide-react";
 import { useMemo } from "react";
-import {
-  BOARD_PRIORITIES,
-  BOARD_TYPES,
-  PRIORITY_CLASS,
-  TYPE_CLASS,
-} from "../../board/lib/constants";
+import { BOARD_PRIORITIES, PRIORITY_CLASS } from "../../board/lib/constants";
 import type {
   BoardColumn,
   TicketDetail,
   TicketPriority,
-  TicketType,
 } from "../../board/types";
 import type { ProjectLabel, ProjectMember } from "../../types";
-import { formatTicketEnum } from "../../backlog/lib/constants";
 import type { UpdateTicketPayload } from "../types";
 import useTicketDetailsSidebarForm from "../hooks/useTicketDetailsSidebarForm";
+import useProjectIssueTypes from "@/features/(workspace)/hooks/useProjectIssueTypes";
 
 type TicketDetailsSidebarProps = {
   ticket: TicketDetail;
@@ -49,6 +42,7 @@ const TicketDetailsSidebar = ({
     canEdit,
     onPatch,
   });
+  const { issueTypes } = useProjectIssueTypes();
 
   const labelOptions = useMemo(
     () =>
@@ -94,7 +88,7 @@ const TicketDetailsSidebar = ({
                           style={{ backgroundColor: column.color }}
                         />
                       )}
-                      {formatTicketEnum(column.name.replace(/_/g, " "))}
+                      {capitalizeFirstChar(column.name.replace(/_/g, " "))}
                     </span>
                   </SelectItem>
                 ))}
@@ -103,27 +97,34 @@ const TicketDetailsSidebar = ({
           </form.AppField>
 
           <form.AppField
-            name="type"
+            name="typeId"
             listeners={{
               onChange: ({ value }) => {
-                if (isSyncingRef.current || value === ticket.type) return;
-                patchIfEditable({ type: value as TicketType });
+                if (isSyncingRef.current) return;
+                const currentTypeId = ticket.typeId ?? "none";
+                if (value === currentTypeId) return;
+                patchIfEditable({ typeId: value === "none" ? null : value });
               },
             }}
           >
             {(field) => (
-              <field.Select label="Type" placeholder="Select type">
-                {BOARD_TYPES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "border text-[10px] uppercase",
-                        TYPE_CLASS[option],
-                      )}
-                    >
-                      {formatTicketEnum(option)}
-                    </Badge>
+              <field.Select
+                label="Issue type"
+                placeholder="Select type"
+                optional
+              >
+                <SelectItem value="none">
+                  <span className="text-muted-foreground">No type</span>
+                </SelectItem>
+                {issueTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: t.color }}
+                      />
+                      <span className="capitalize">{t.key}</span>
+                    </span>
                   </SelectItem>
                 ))}
               </field.Select>
@@ -149,14 +150,13 @@ const TicketDetailsSidebar = ({
                         PRIORITY_CLASS[option],
                       )}
                     >
-                      {formatTicketEnum(option)}
+                      {option}
                     </span>
                   </SelectItem>
                 ))}
               </field.Select>
             )}
           </form.AppField>
-
           <form.AppField
             name="assigneeId"
             listeners={{
@@ -190,7 +190,6 @@ const TicketDetailsSidebar = ({
               </field.Select>
             )}
           </form.AppField>
-
           <form.AppField
             name="storyPoints"
             listeners={{
@@ -226,7 +225,6 @@ const TicketDetailsSidebar = ({
               />
             )}
           </form.AppField>
-
           <form.AppField
             name="labels"
             listeners={{

@@ -8,7 +8,7 @@ import { useProject } from "@/providers/projectProvider";
 import type { JSONContent } from "@tiptap/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   createTicketComment,
@@ -16,6 +16,8 @@ import {
   getTicketById,
   getTicketComments,
   updateTicket,
+  ticketQueryKey,
+  commentsQueryKey,
 } from "../api";
 import type { TicketComment, UpdateTicketPayload } from "../types";
 import {
@@ -23,13 +25,7 @@ import {
   projectBoardQueryKey,
   projectColumnsQueryKey,
 } from "../../board/api";
-import { projectBacklogQueryKey } from "../../backlog/lib/api";
-
-const ticketQueryKey = (projectId: string, ticketId: string) =>
-  ["ticket", projectId, ticketId] as const;
-
-const commentsQueryKey = (projectId: string, ticketId: string) =>
-  ["ticket-comments", projectId, ticketId] as const;
+import { projectBacklogQueryKey } from "../../backlog/api";
 
 const useTicketDetails = (ticketId: string) => {
   const router = useRouter();
@@ -75,27 +71,18 @@ const useTicketDetails = (ticketId: string) => {
     [ticketQuery.data?.description],
   );
 
-  const [title, setTitle] = useState("");
+  const [editedTitle, setEditedTitle] = useState<string | null>(null);
   const [editedDescription, setEditedDescription] =
     useState<JSONContent | null>(null);
-  const [isDescriptionDirty, setIsDescriptionDirty] = useState(false);
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const description =
-    isDescriptionDirty && editedDescription !== null
-      ? editedDescription
-      : serverDescription;
-
-  useEffect(() => {
-    if (!ticketQuery.data) return;
-
-    setTitle(ticketQuery.data.title);
-    setEditedDescription(null);
-    setIsDescriptionDirty(false);
-  }, [ticketQuery.data]);
+  const title = editedTitle ?? ticketQuery.data?.title ?? "";
+  const description = editedDescription ?? serverDescription;
 
   const invalidateTicketLists = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: projectBoardQueryKey(projectId) });
+    queryClient.invalidateQueries({
+      queryKey: projectBoardQueryKey(projectId),
+    });
     queryClient.invalidateQueries({
       queryKey: projectBacklogQueryKey(projectId),
     });
@@ -105,7 +92,7 @@ const useTicketDetails = (ticketId: string) => {
     mutationFn: (payload: UpdateTicketPayload) =>
       updateTicket(projectId, ticketId, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: ticketQueryKey(projectId, ticketId),
       });
       invalidateTicketLists();
@@ -114,6 +101,10 @@ const useTicketDetails = (ticketId: string) => {
       toast.error(
         error instanceof Error ? error.message : "Failed to update ticket",
       );
+    },
+    onSettled: () => {
+      setEditedTitle(null);
+      setEditedDescription(null);
     },
   });
 
@@ -158,13 +149,11 @@ const useTicketDetails = (ticketId: string) => {
 
   const handleTitleChange = useCallback(
     (nextTitle: string) => {
-      setTitle(nextTitle);
+      setEditedTitle(nextTitle);
 
       if (!canEdit || !ticketQuery.data) return;
 
-      if (titleDebounceRef.current) {
-        clearTimeout(titleDebounceRef.current);
-      }
+      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
 
       titleDebounceRef.current = setTimeout(() => {
         const trimmed = nextTitle.trim();
@@ -176,10 +165,7 @@ const useTicketDetails = (ticketId: string) => {
   );
 
   const handleDescriptionChange = useCallback(
-    (nextDescription: JSONContent) => {
-      setEditedDescription(nextDescription);
-      setIsDescriptionDirty(true);
-    },
+    (nextDescription: JSONContent) => setEditedDescription(nextDescription),
     [],
   );
 
@@ -191,8 +177,6 @@ const useTicketDetails = (ticketId: string) => {
       : editedDescription;
 
     patchTicket({ description: payload });
-    setIsDescriptionDirty(false);
-    setEditedDescription(null);
   }, [canEdit, editedDescription, patchTicket, ticketQuery.data]);
 
   return {
@@ -212,7 +196,7 @@ const useTicketDetails = (ticketId: string) => {
       canEdit,
       title,
       description,
-      isDescriptionDirty,
+      isDescriptionDirty: editedDescription !== null,
     },
     actions: {
       buildWorkspacePath,

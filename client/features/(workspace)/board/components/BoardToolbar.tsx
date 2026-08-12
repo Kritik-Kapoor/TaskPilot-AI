@@ -1,13 +1,16 @@
 "use client";
 
-import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
 import { FormInputGroup } from "@/components/common/form/FormInputGroup";
 import { cn } from "@/lib/utils";
-import { BOARD_PRIORITIES, BOARD_TYPES } from "../lib/constants";
+import { BOARD_PRIORITIES } from "../lib/constants";
 import type useBoardPage from "../hooks/useBoardPage";
 import { initialsOf, getColor } from "@/lib/utils/common";
+import useProjectIssueTypes from "@/features/(workspace)/hooks/useProjectIssueTypes";
+import { useProject } from "@/providers/projectProvider";
 
 type BoardToolbarProps = {
   state: ReturnType<typeof useBoardPage>["state"];
@@ -19,6 +22,18 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
     state;
 
   const { clearFilters, toggleAssigneeFilter } = actions;
+  const { issueTypes } = useProjectIssueTypes();
+  const { projectLabels, isLabelsLoading } = useProject();
+
+  const labelOptions = useMemo(
+    () =>
+      projectLabels.map((label) => ({
+        value: label.id,
+        label: label.name,
+        color: label.color,
+      })),
+    [projectLabels],
+  );
 
   return (
     <div className="shrink-0 space-y-3 border-b border-border bg-background pb-4">
@@ -29,17 +44,12 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
             {filteredCount} of {totalCount} tickets
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <SlidersHorizontal className="h-4 w-4" /> Group by
-          </Button>
-          <Button
-            className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
-            onClick={actions.openCreateTicketDialog}
-          >
-            <Plus className="h-4 w-4" /> New ticket
-          </Button>
-        </div>
+        <Button
+          className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
+          onClick={actions.openCreateTicketDialog}
+        >
+          <Plus className="h-4 w-4" /> New ticket
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -104,12 +114,34 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
               controlClassName="h-9 w-32.5"
             >
               <SelectItem value="all">Any type</SelectItem>
-              {BOARD_TYPES.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
+              {issueTypes.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    <span className="capitalize">{t.key}</span>
+                  </span>
                 </SelectItem>
               ))}
             </field.Select>
+          )}
+        </filterForm.AppField>
+
+        <filterForm.AppField name="labels">
+          {(field) => (
+            <div className="w-36">
+              <field.MultiSelect
+                hideLabel
+                label="Labels"
+                placeholder="Labels"
+                displayValueType="count"
+                loading={isLabelsLoading}
+                emptyMessage="No labels found."
+                options={labelOptions}
+              />
+            </div>
           )}
         </filterForm.AppField>
 

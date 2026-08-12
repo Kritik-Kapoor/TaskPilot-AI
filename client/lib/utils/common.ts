@@ -25,3 +25,20 @@ export const formatDisplayName = (name: string) =>
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return `rgba(100, 100, 100, ${alpha})`;
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`;
+};
+
+export const issueTypeBadgeStyle = (
+  color: string,
+): { borderColor: string; color: string; backgroundColor: string } => ({
+  borderColor: color,
+  color,
+  backgroundColor: hexToRgba(color, 0.1),
+});
+
+export const capitalizeFirstChar = (value: string) =>
+  value.charAt(0) + value.slice(1).toLowerCase();

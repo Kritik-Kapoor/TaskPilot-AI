@@ -6,14 +6,13 @@ import { z } from "zod";
 import type { TicketDetail } from "../../board/types";
 import type { UpdateTicketPayload } from "../types";
 
-const ticketTypeSchema = z.enum(["STORY", "BUG", "TASK", "EPIC"]);
 const ticketPrioritySchema = z.enum(["URGENT", "HIGH", "MEDIUM", "LOW"]);
 
 export const ticketDetailsSidebarSchema = z.object({
-  columnId: z.string().uuid(),
-  type: ticketTypeSchema,
+  columnId: z.uuid("Invalid column ID"),
   priority: ticketPrioritySchema,
-  assigneeId: z.string(),
+  assigneeId: z.uuid("Invalid assignee ID"),
+  typeId: z.string(),
   storyPoints: z.string().superRefine((value, ctx) => {
     if (!value.trim()) return;
 
@@ -36,9 +35,9 @@ export const getTicketSidebarFormValues = (
   ticket: TicketDetail,
 ): TicketDetailsSidebarFormValues => ({
   columnId: ticket.columnId,
-  type: ticket.type,
   priority: ticket.priority,
   assigneeId: ticket.assigneeId ?? "unassigned",
+  typeId: ticket.typeId ?? "none",
   storyPoints: ticket.storyPoints != null ? String(ticket.storyPoints) : "",
   labels: ticket.labels.map((label) => label.id),
 });
@@ -69,7 +68,7 @@ const useTicketDetailsSidebarForm = ({
     queueMicrotask(() => {
       isSyncingRef.current = false;
     });
-  }, [form, ticket.id, ticket.updatedAt]);
+  }, [form, ticket]);
 
   const patchIfEditable = (payload: UpdateTicketPayload) => {
     if (!canEdit || isSyncingRef.current) return;

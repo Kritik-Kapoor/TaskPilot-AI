@@ -12,7 +12,7 @@ const TicketDetailsPage = ({ params }: TicketDetailsPageProps) => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <TicketDetailsView ticketId={ticketId} />
+      <TicketDetailsView key={ticketId} ticketId={ticketId} />
     </div>
   );
 };

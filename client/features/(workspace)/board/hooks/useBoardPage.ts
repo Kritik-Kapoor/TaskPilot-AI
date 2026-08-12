@@ -24,7 +24,6 @@ import type { RepositionResult } from "../lib/utils/boardTickets";
 import {
   type Ticket,
   type TicketPriority,
-  type TicketType,
   type ProjectBoardResponse,
 } from "../types";
 
@@ -46,14 +45,15 @@ type BoardFilters = {
   query: string;
   assignee: string;
   priority: TicketPriority | "all";
-  type: TicketType | "all";
+  type: string;
+  labels: string[];
 };
 
 const matchesFilter = (
   ticket: TicketsByColumn[string][number],
   params: BoardFilters,
 ): boolean => {
-  const { query, assignee, priority, type } = params;
+  const { query, assignee, priority, type, labels } = params;
 
   if (
     query &&
@@ -70,7 +70,14 @@ const matchesFilter = (
       return false;
   }
   if (priority !== "all" && ticket.priority !== priority) return false;
-  if (type !== "all" && ticket.type !== type) return false;
+  if (type !== "all" && ticket.typeId !== type) return false;
+  if (labels.length > 0) {
+    const ticketLabelIds = new Set(ticket.labels.map((label) => label.id));
+    const hasSelectedLabel = labels.some((labelId) =>
+      ticketLabelIds.has(labelId),
+    );
+    if (!hasSelectedLabel) return false;
+  }
 
   return true;
 };
@@ -134,6 +141,7 @@ const defaultFilters: BoardFilters = {
   assignee: "all",
   priority: "all",
   type: "all",
+  labels: [],
 };
 
 const useBoardPage = () => {
@@ -357,7 +365,8 @@ const useBoardPage = () => {
   const activeFilterCount =
     (filters.assignee !== "all" ? 1 : 0) +
     (filters.priority !== "all" ? 1 : 0) +
-    (filters.type !== "all" ? 1 : 0);
+    (filters.type !== "all" ? 1 : 0) +
+    (filters.labels.length > 0 ? 1 : 0);
 
   const clearFilters = useCallback(() => {
     filterForm.reset();

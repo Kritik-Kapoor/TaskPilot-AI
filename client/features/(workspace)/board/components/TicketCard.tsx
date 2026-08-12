@@ -3,11 +3,11 @@
 import { useSortable } from "@dnd-kit/react/sortable";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { initialsOf, getColor } from "@/lib/utils/common";
+import { initialsOf, getColor, issueTypeBadgeStyle } from "@/lib/utils/common";
 import { useProject } from "@/providers/projectProvider";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
-import { PRIORITY_CLASS, TYPE_CLASS } from "../lib/constants";
+import { PRIORITY_CLASS } from "../lib/constants";
 import type { Ticket } from "../types";
 
 type TicketCardProps = {
@@ -62,15 +62,15 @@ const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
       )}
     >
       <div className="flex items-center justify-between">
-        <Badge
-          variant="outline"
-          className={cn(
-            "border text-[10px] uppercase",
-            TYPE_CLASS[ticket.type],
-          )}
-        >
-          {ticket.type}
-        </Badge>
+        {ticket.issueType && (
+          <Badge
+            variant="outline"
+            className="border text-[10px] uppercase"
+            style={issueTypeBadgeStyle(ticket.issueType.color)}
+          >
+            {ticket.issueType.key}
+          </Badge>
+        )}
         <span
           className={cn(
             "text-[10px] font-medium tracking-wider uppercase",

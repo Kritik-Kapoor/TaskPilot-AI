@@ -14,8 +14,8 @@ import {
 import type { Ticket } from "../../board/types";
 import { deleteTicket, updateTicket } from "../../ticket/api";
 import { createBacklogTableColumns } from "../components/BacklogTableColumns";
-import { getProjectBacklog, projectBacklogQueryKey } from "../lib/api";
 import type { ProjectBacklogResponse } from "../types";
+import { getProjectBacklog, projectBacklogQueryKey } from "../api";
 
 const optimisticCreate = (
   old: ProjectBacklogResponse,
@@ -92,7 +92,7 @@ const useBacklogPage = () => {
     if (!normalizedQuery) return backlogData.tickets;
 
     return backlogData.tickets.filter(
-      (ticket) =>
+      (ticket: Ticket) =>
         ticket.title.toLowerCase().includes(normalizedQuery) ||
         ticket.ticketKey.toLowerCase().includes(normalizedQuery),
     );

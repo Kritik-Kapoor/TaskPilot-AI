@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import { TicketPriority, TicketType } from "../board/types";
+import type { TicketPriority } from "../board/types";
 
 export type TicketComment = {
   id: string;
@@ -18,7 +18,7 @@ export type UpdateTicketPayload = {
   title?: string;
   description?: JSONContent | null;
   priority?: TicketPriority;
-  type?: TicketType;
+  typeId?: string | null;
   assigneeId?: string | null;
   storyPoints?: number | null;
   labels?: string[];

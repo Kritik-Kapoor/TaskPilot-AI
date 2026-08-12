@@ -7,14 +7,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { formatDisplayName, initialsOf } from "@/lib/utils/common";
 import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
-import {
-  Bell,
-  CircleHelp,
-  LogOut,
-  Plus,
-  Search,
-  UserRound,
-} from "lucide-react";
+import { Bell, CircleHelp, LogOut, Search, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
@@ -81,10 +74,6 @@ const WorkspaceNavbar = () => {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <Button className="hidden bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95 sm:inline-flex">
-          <Plus />
-          Create
-        </Button>
         <Button variant="ghost" size="icon-lg" aria-label="Help">
           <CircleHelp />
         </Button>

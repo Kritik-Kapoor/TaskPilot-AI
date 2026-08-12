@@ -10,7 +10,7 @@ export const getPositionBetween = (
   if (before === null && after === null) return TICKET_POSITION_GAP;
 
   if (before === null) {
-    return after! <= 1 ? 1 : Math.floor(after! / 2);
+    return after! <= 1 ? 1 : after! - 1;
   }
 
   if (after === null) return before + TICKET_POSITION_GAP;

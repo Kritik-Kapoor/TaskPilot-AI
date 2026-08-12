@@ -2,8 +2,6 @@ import { z } from "zod";
 
 export const ticketPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 
-export const ticketTypeSchema = z.enum(["STORY", "BUG", "TASK", "EPIC"]);
-
 const ticketDescriptionSchema = z.looseObject({ type: z.literal("doc") });
 
 export const ticketIdParamsSchema = z.object({
@@ -25,7 +23,7 @@ export const createTicketSchema = z
       .max(140, "Title must be 140 characters or less"),
     description: ticketDescriptionSchema.optional(),
     priority: ticketPrioritySchema.optional(),
-    type: ticketTypeSchema.optional(),
+    typeId: z.uuid("Invalid issue type ID").nullable().optional(),
     assigneeId: z.uuid("Invalid assignee ID").nullable().optional(),
     storyPoints: z
       .number()
@@ -75,7 +73,7 @@ export const updateTicketSchema = z
       .optional(),
     description: ticketDescriptionSchema.nullable().optional(),
     priority: ticketPrioritySchema.optional(),
-    type: ticketTypeSchema.optional(),
+    typeId: z.uuid("Invalid issue type ID").nullable().optional(),
     assigneeId: z.uuid("Invalid assignee ID").nullable().optional(),
     storyPoints: z
       .number()

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useMemo } from "react";
 import ProjectSwitcher from "@/components/common/ProjectSwitcher";
 import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
@@ -25,12 +26,16 @@ import {
   LayoutDashboard,
   List,
   Settings,
+  SlidersHorizontal,
   SquareKanban,
   User,
   UserCog,
   UserPlus,
   Users,
 } from "lucide-react";
+import { CONFIGURATION_SECTIONS } from "@/features/(workspace)/configuration/lib/constants";
+import { ProjectConfigurationDialog } from "@/features/(workspace)/configuration/components";
+import type { ConfigurationSection } from "@/features/(workspace)/configuration/types";
 
 const WORKSPACE_NAV = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -63,116 +68,151 @@ const ORG_ADMIN_NAV = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const { isProjectAdmin, hasJoinedProjects, buildWorkspacePath } =
+  const { isProjectAdmin, hasJoinedProjects, buildWorkspacePath, projectRole } =
     useProject();
+
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configSection, setConfigSection] =
+    useState<ConfigurationSection>("labels");
 
   const isOrgAdmin =
     user?.organizationRole === "OWNER" || user?.organizationRole === "ADMIN";
 
+  const canManageLabels = projectRole !== "VIEWER";
+
+  const activeSection = useMemo(
+    () => CONFIGURATION_SECTIONS.find((s) => s.id === configSection)!,
+    [configSection],
+  );
+
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        <ProjectSwitcher />
-      </SidebarHeader>
+    <>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="border-b border-sidebar-border">
+          <ProjectSwitcher />
+        </SidebarHeader>
 
-      <SidebarContent>
-        {hasJoinedProjects ? (
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {WORKSPACE_NAV.map((item) => (
-                  <SidebarMenuItem key={item.href}>
+        <SidebarContent>
+          {hasJoinedProjects ? (
+            <SidebarGroup>
+              <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {WORKSPACE_NAV.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === item.href}
+                        tooltip={item.title}
+                      >
+                        <Link href={buildWorkspacePath(item.href)}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+
+                  <SidebarMenuItem>
                     <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                      tooltip={item.title}
+                      isActive={isConfigOpen}
+                      tooltip="Configuration"
+                      onClick={() => setIsConfigOpen(true)}
                     >
-                      <Link href={buildWorkspacePath(item.href)}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
+                      <SlidersHorizontal />
+                      <span>Configuration</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : (
-          <SidebarGroup>
-            <SidebarGroupLabel>Organization</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {ORG_NAV.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : (
+            <SidebarGroup>
+              <SidebarGroupLabel>Organization</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {ORG_NAV.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === item.href}
+                        tooltip={item.title}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
-        {isProjectAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Project Management</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {PROJECT_ADMIN_NAV.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                      tooltip={item.title}
-                    >
-                      <Link href={buildWorkspacePath(item.href)}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+          {isProjectAdmin && (
+            <SidebarGroup>
+              <SidebarGroupLabel>Project Management</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {PROJECT_ADMIN_NAV.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === item.href}
+                        tooltip={item.title}
+                      >
+                        <Link href={buildWorkspacePath(item.href)}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
-        {isOrgAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Organization Management</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {ORG_ADMIN_NAV.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-      </SidebarContent>
+          {isOrgAdmin && (
+            <SidebarGroup>
+              <SidebarGroupLabel>Organization Management</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {ORG_ADMIN_NAV.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === item.href}
+                        tooltip={item.title}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+        </SidebarContent>
 
-      <SidebarFooter />
-      <SidebarRail />
-    </Sidebar>
+        <SidebarFooter />
+        <SidebarRail />
+      </Sidebar>
+
+      <ProjectConfigurationDialog
+        open={isConfigOpen}
+        onOpenChange={setIsConfigOpen}
+        section={configSection}
+        onSectionChange={setConfigSection}
+        activeSectionTitle={activeSection.title}
+        activeSectionDescription={activeSection.description}
+        canManageLabels={canManageLabels}
+        isProjectAdmin={isProjectAdmin}
+      />
+    </>
   );
 }

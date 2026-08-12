@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/utils/apiClient";
-import type { ProjectBacklogResponse } from "../types";
+import type { ProjectBacklogResponse } from "./types";
 
 export const projectBacklogQueryKey = (projectId: string) =>
   ["project-backlog", projectId] as const;

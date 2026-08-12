@@ -3,23 +3,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { formatDisplayName } from "@/lib/utils/common";
-import { formatTicketEnum } from "@/features/(workspace)/backlog/lib/constants";
-import { TYPE_CLASS } from "@/features/(workspace)/board/lib/constants";
-import type {
-  TicketDetail,
-  TicketType,
-} from "@/features/(workspace)/board/types";
+import { formatDisplayName, issueTypeBadgeStyle } from "@/lib/utils/common";
+import type { TicketDetail } from "@/features/(workspace)/board/types";
 import type { Project, ProjectMember } from "@/features/(workspace)/types";
 import {
   ArrowLeft,
   Calendar,
-  Check,
   ChevronRight,
   Clock,
   Link2,
-  Loader2,
   MessageSquare,
   SquarePen,
   Trash2,
@@ -36,11 +28,8 @@ type TicketDetailsHeaderProps = {
   commentCount: number;
   title: string;
   canEdit: boolean;
-  isSaving: boolean;
-  isDescriptionDirty: boolean;
   buildWorkspacePath: (path: string) => string;
   onTitleChange: (title: string) => void;
-  onSave: () => void;
   onDelete: () => void;
 };
 
@@ -58,11 +47,8 @@ const TicketDetailsHeader = ({
   commentCount,
   title,
   canEdit,
-  isSaving,
-  isDescriptionDirty,
   buildWorkspacePath,
   onTitleChange,
-  onSave,
   onDelete,
 }: TicketDetailsHeaderProps) => {
   const projectName = project
@@ -83,7 +69,6 @@ const TicketDetailsHeader = ({
     }
   };
 
-  const hasUnsavedChanges = isDescriptionDirty;
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -161,34 +146,19 @@ const TicketDetailsHeader = ({
             </Button>
           )}
 
-          {canEdit && hasUnsavedChanges && (
-            <Button
-              type="button"
-              disabled={isSaving}
-              onClick={onSave}
-              className="bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
-            >
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              Save
-            </Button>
-          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          variant="outline"
-          className={cn(
-            "border text-[11px] uppercase",
-            TYPE_CLASS[ticket.type as TicketType],
-          )}
-        >
-          {formatTicketEnum(ticket.type)}
-        </Badge>
+        {ticket.issueType && (
+          <Badge
+            variant="outline"
+            className="border text-[11px] uppercase"
+            style={issueTypeBadgeStyle(ticket.issueType.color)}
+          >
+            {ticket.issueType.key}
+          </Badge>
+        )}
         <span className="font-mono text-sm text-muted-foreground">
           {ticket.ticketKey}
         </span>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Loader2, X } from "lucide-react";
+import { ChevronsUpDown, Loader2, X } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -173,17 +173,13 @@ export function FormMultiSelect({
                         onClick={() => toggleOption(option)}
                         className={cn(
                           "flex w-full min-h-7 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs/relaxed outline-hidden select-none",
-                          "hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
-                          isActive && "bg-muted",
+                          "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40",
+                          isActive
+                            ? "bg-accent text-accent-foreground"
+                            : "focus-visible:bg-muted",
                           isDisabled && "pointer-events-none opacity-50",
                         )}
                       >
-                        <Check
-                          className={cn(
-                            "h-4 w-4 shrink-0",
-                            isActive ? "opacity-100" : "opacity-0",
-                          )}
-                        />
                         {typeof option.color === "string" && (
                           <span
                             className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -198,7 +194,7 @@ export function FormMultiSelect({
               </ul>
             </div>
           ) : (
-            <div className="py-3 text-center text-sm text-muted-foreground">
+            <div className="py-2 text-center text-xs text-muted-foreground">
               {emptyMessage}
             </div>
           )}

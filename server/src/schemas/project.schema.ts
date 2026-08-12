@@ -77,6 +77,44 @@ export const updateLabelParamsSchema = z.object({
   labelId: z.uuid("Invalid label ID"),
 });
 
+export const updateIssueTypeParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  typeId: z.uuid("Invalid ticket type ID"),
+});
+
+export const updateIssueTypeBodySchema = z.object({
+  isEnabled: z.boolean(),
+  key: z.string().trim().min(2, "Key must be at least 2 characters"),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
+});
+
+export const createIssueTypeBodySchema = z.object({
+  key: z.string().trim().min(2, "Key must be at least 2 characters"),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
+});
+
+export const boardColumnParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  columnId: z.uuid("Invalid column ID"),
+});
+
+export const boardColumnBodySchema = z.object({
+  name: z.string().trim().min(2, "Column name must be at least 2 characters"),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
+});
+
+export const reorderBoardColumnsBodySchema = z.object({
+  columnId: z.uuid("Invalid column ID"),
+  newPosition: z.number().int("Position must be an integer"),
+});
+
+export type ReorderBoardColumnsBody = z.infer<
+  typeof reorderBoardColumnsBodySchema
+>;
+export type CreateIssueTypeBody = z.infer<typeof createIssueTypeBodySchema>;
+export type BoardColumnParams = z.infer<typeof boardColumnParamsSchema>;
+export type BoardColumnBody = z.infer<typeof boardColumnBodySchema>;
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>;
@@ -103,6 +141,8 @@ export const reviewProjectJoinRequestBodySchema = z.object({
 
 export type CreateLabelBody = z.infer<typeof createLabelBodySchema>;
 export type UpdateLabelParams = z.infer<typeof updateLabelParamsSchema>;
+export type UpdateIssueTypeParams = z.infer<typeof updateIssueTypeParamsSchema>;
+export type UpdateIssueTypeBody = z.infer<typeof updateIssueTypeBodySchema>;
 export type ProjectJoinRequestIdParams = z.infer<
   typeof projectJoinRequestIdParamsSchema
 >;

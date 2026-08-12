@@ -13,14 +13,8 @@ import {
   isTicketDescriptionEmpty,
 } from "@/components/common/ticket-editor/ticketDescription";
 import type { JSONContent } from "@tiptap/core";
-import {
-  isUuid,
-  type Ticket,
-  type TicketPriority,
-  type TicketType,
-} from "../board/types";
+import { isUuid, type Ticket, type TicketPriority } from "../board/types";
 
-const ticketTypeSchema = z.enum(["STORY", "BUG", "TASK", "EPIC"]);
 const ticketPrioritySchema = z.enum(["URGENT", "HIGH", "MEDIUM", "LOW"]);
 
 const ticketDescriptionSchema = z.custom<JSONContent>(
@@ -33,7 +27,6 @@ const ticketDescriptionSchema = z.custom<JSONContent>(
 );
 
 export const createTicketFormSchema = z.object({
-  type: ticketTypeSchema,
   priority: ticketPrioritySchema,
   title: z
     .string()
@@ -49,6 +42,7 @@ export const createTicketFormSchema = z.object({
     }
   }),
   assigneeId: z.string(),
+  typeId: z.string(),
   storyPoints: z.string().superRefine((value, ctx) => {
     if (!value.trim()) return;
 
@@ -110,11 +104,11 @@ const useCreateTicket = ({
 
   const form = useAppForm({
     defaultValues: {
-      type: "TASK" as TicketType,
       priority: "MEDIUM" as TicketPriority,
       title: "",
       description: EMPTY_TICKET_DESCRIPTION,
       assigneeId: "unassigned",
+      typeId: "none",
       storyPoints: "",
       labels: [] as string[],
     },
@@ -143,14 +137,17 @@ const useCreateTicket = ({
         ? undefined
         : value.description;
 
+      const typeId =
+        value.typeId && value.typeId !== "none" ? value.typeId : null;
+
       await mutation.mutateAsync({
         projectId: activeProject.id,
         columnId,
         title: value.title.trim(),
         ...(description && { description }),
         priority: value.priority,
-        type: value.type,
         assigneeId,
+        typeId,
         storyPoints: value.storyPoints.trim()
           ? Number(value.storyPoints)
           : null,

@@ -64,6 +64,7 @@ model Project {
   columns        BoardColumn[]
   labels         Label[]
   joinRequests   JoinRequest[]
+  issueTypes    IssueType[]
 
   @@unique([organizationId, projectName])
   @@unique([organizationId, projectKey])
@@ -81,25 +82,27 @@ model BoardColumn {
   tickets   Ticket[]
 
   @@index([projectId, position])
+  @@unique([projectId, name])
 }
 
 model Ticket {
   id          String         @id @default(uuid())
   columnId    String
   projectId   String
+  typeId      String?
   ticketKey   String
   title       String
   description Json?
   priority    TicketPriority @default(MEDIUM)
-  type        TicketType     @default(TASK)
   assigneeId  String?
   position    Int
-  storyPoints Int?      
+  storyPoints Int?
   createdById String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   column      BoardColumn    @relation(fields: [columnId], references: [id], onDelete: Restrict)
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issueType   IssueType?     @relation(fields: [typeId], references: [id], onDelete: SetNull)
   assignee    User?          @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy   User?          @relation("TicketCreator", fields: [createdById], references: [id], onDelete: SetNull)
   comments Comment[]
@@ -109,6 +112,7 @@ model Ticket {
   @@index([columnId, position])
   @@index([assigneeId])
   @@index([projectId])
+  @@index([typeId])
 }
 
 model Comment {
@@ -171,6 +175,20 @@ model Label {
   @@unique([projectId, name])
 }
 
+model IssueType {
+  id        String     @id @default(uuid())
+  projectId String
+  key       String
+  color     String     @default("#c4c4cc")
+  isEnabled Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tickets   Ticket[]
+
+  @@unique([projectId, key])
+}
+
 enum JoinRequestStatus {
   PENDING
   APPROVED
@@ -194,11 +212,4 @@ enum TicketPriority {
   MEDIUM
   HIGH
   URGENT
-}
-
-enum TicketType {
-  STORY
-  BUG
-  TASK
-  EPIC
 }

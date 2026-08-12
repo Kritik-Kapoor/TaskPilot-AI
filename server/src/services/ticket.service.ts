@@ -27,7 +27,14 @@ const ticketBaseSelect = {
   title: true,
   description: true,
   priority: true,
-  type: true,
+  typeId: true,
+  issueType: {
+    select: {
+      id: true,
+      key: true,
+      color: true,
+    },
+  },
   position: true,
   storyPoints: true,
   columnId: true,
@@ -266,7 +273,7 @@ export const createTicket = async (
         title: input.title,
         description: input.description as Prisma.InputJsonValue | undefined,
         priority: input.priority ?? "MEDIUM",
-        type: input.type ?? "TASK",
+        typeId: input.typeId ?? null,
         assigneeId: input.assigneeId ?? null,
         storyPoints: input.storyPoints ?? null,
         position,
@@ -479,7 +486,7 @@ export const updateTicket = async (
               : (input.description as Prisma.InputJsonValue),
         }),
         ...(input.priority !== undefined && { priority: input.priority }),
-        ...(input.type !== undefined && { type: input.type }),
+        ...(input.typeId !== undefined && { typeId: input.typeId }),
         ...(input.assigneeId !== undefined && { assigneeId: input.assigneeId }),
         ...(input.storyPoints !== undefined && {
           storyPoints: input.storyPoints,

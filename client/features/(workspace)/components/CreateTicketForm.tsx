@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { SelectItem } from "@/components/ui/select";
@@ -9,12 +8,11 @@ import { Loader2, Plus } from "lucide-react";
 import { useMemo } from "react";
 import {
   BOARD_PRIORITIES,
-  BOARD_TYPES,
   PRIORITY_CLASS,
-  TYPE_CLASS,
 } from "@/features/(workspace)/board/lib/constants";
 import type { CreateTicketFormType } from "@/features/(workspace)/hooks/useCreateTicket";
 import type { ProjectMember } from "@/features/(workspace)/types";
+import useProjectIssueTypes from "@/features/(workspace)/hooks/useProjectIssueTypes";
 
 type CreateTicketFormProps = {
   form: CreateTicketFormType;
@@ -30,6 +28,7 @@ const CreateTicketForm = ({
   onCancel,
 }: CreateTicketFormProps) => {
   const { projectLabels, isLabelsLoading } = useProject();
+  const { issueTypes } = useProjectIssueTypes();
 
   const labelOptions = useMemo(
     () =>
@@ -127,20 +126,21 @@ const CreateTicketForm = ({
           )}
         </form.AppField>
 
-        <form.AppField name="type">
+        <form.AppField name="typeId">
           {(field) => (
-            <field.Select label="Type" placeholder="Select type">
-              {BOARD_TYPES.map((option) => (
-                <SelectItem key={option} value={option}>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "border text-[10px] uppercase",
-                      TYPE_CLASS[option],
-                    )}
-                  >
-                    {option}
-                  </Badge>
+            <field.Select label="Issue type" placeholder="Select type" optional>
+              <SelectItem value="none">
+                <span className="text-muted-foreground">No type</span>
+              </SelectItem>
+              {issueTypes.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    <span className="capitalize">{t.key}</span>
+                  </span>
                 </SelectItem>
               ))}
             </field.Select>
