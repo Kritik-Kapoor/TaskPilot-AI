@@ -1,22 +1,32 @@
 import { apiFetch } from "@/lib/utils/apiClient";
 import type {
   BoardColumn,
+  BoardFilters,
   CreateTicketPayload,
   ProjectBoardResponse,
   RepositionTicketPayload,
   Ticket,
 } from "./types";
+import { buildBoardFilterSearchParams } from "./lib/utils/boardTickets";
 
-export const projectBoardQueryKey = (projectId: string) =>
-  ["project-board", projectId] as const;
+export const projectBoardQueryKey = (
+  projectId: string,
+  filters?: BoardFilters,
+) => ["project-board", projectId, filters ?? null] as const;
 
 export const projectColumnsQueryKey = (projectId: string) =>
   ["project-columns", projectId] as const;
 
-export const getProjectBoard = (projectId: string) =>
-  apiFetch<ProjectBoardResponse>(`/ticket/project-board/${projectId}`, {
+export const getProjectBoard = (projectId: string, filters?: BoardFilters) => {
+  const search = filters
+    ? buildBoardFilterSearchParams(filters).toString()
+    : "";
+  const path = `/ticket/project-board/${projectId}${search ? `?${search}` : ""}`;
+
+  return apiFetch<ProjectBoardResponse>(path, {
     fallbackErrorMessage: "Failed to fetch board tickets",
   });
+};
 
 export const getProjectColumns = (projectId: string) =>
   apiFetch<{ columns: BoardColumn[] }>(`/ticket/project-columns/${projectId}`, {

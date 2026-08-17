@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronsUpDown, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -138,7 +138,11 @@ export function FormMultiSelect({
             ) : (
               <span className="text-muted-foreground">{placeholder}</span>
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            {open ? (
+              <ChevronUp className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            ) : (
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent

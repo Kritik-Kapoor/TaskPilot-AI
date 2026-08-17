@@ -19,9 +19,17 @@ type BoardColumnsProps = {
   columns: BoardColumnData[];
   dndHandlers: DndHandlers;
   isLoading?: boolean;
+  isFetching?: boolean;
+  dragDisabled?: boolean;
 };
 
-function DroppableColumn({ column }: { column: BoardColumnData }) {
+function DroppableColumn({
+  column,
+  dragDisabled,
+}: {
+  column: BoardColumnData;
+  dragDisabled?: boolean;
+}) {
   const { ref, isDropTarget } = useDroppable({
     id: column.id,
     type: "column",
@@ -64,6 +72,7 @@ function DroppableColumn({ column }: { column: BoardColumnData }) {
             ticket={ticket}
             index={dndIndex}
             columnId={column.id}
+            dragDisabled={dragDisabled}
           />
         ))}
 
@@ -81,6 +90,8 @@ const BoardColumns = ({
   columns,
   dndHandlers,
   isLoading,
+  isFetching,
+  dragDisabled,
 }: BoardColumnsProps) => {
   if (isLoading) {
     return (
@@ -104,10 +115,19 @@ const BoardColumns = ({
       onDragOver={dndHandlers.onDragOver}
       onDragEnd={dndHandlers.onDragEnd}
     >
-      <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+      <div
+        className={cn(
+          "min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden transition-opacity duration-150",
+          isFetching && "opacity-60",
+        )}
+      >
         <div className="flex h-full min-w-max gap-4 py-4 pr-2">
           {columns.map((column) => (
-            <DroppableColumn key={column.id} column={column} />
+            <DroppableColumn
+              key={column.id}
+              column={column}
+              dragDisabled={dragDisabled}
+            />
           ))}
         </div>
       </div>

@@ -49,6 +49,15 @@ export type ApiColumnWithTickets = BoardColumn & {
 export type ProjectBoardResponse = {
   columns: ApiColumnWithTickets[];
   totalTicketCount: number;
+  filteredTicketCount: number;
+};
+
+export type BoardFilters = {
+  query: string;
+  assignee: string;
+  priority: TicketPriority | "all";
+  type: string;
+  labels: string[];
 };
 
 export type CreateTicketPayload = {

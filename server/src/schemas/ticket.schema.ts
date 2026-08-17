@@ -97,6 +97,36 @@ export const updateTicketSchema = z
     }
   });
 
+const labelsFilterQuerySchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === "") return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}, z.array(z.uuid("Invalid label ID")));
+
+export const boardFilterQuerySchema = z.object({
+  query: z.string().trim().optional(),
+  assignee: z
+    .union([z.literal("all"), z.literal("unassigned"), z.uuid("Invalid assignee ID")])
+    .optional()
+    .default("all"),
+  priority: z
+    .union([z.literal("all"), ticketPrioritySchema])
+    .optional()
+    .default("all"),
+  type: z
+    .union([z.literal("all"), z.uuid("Invalid issue type ID")])
+    .optional()
+    .default("all"),
+  labels: labelsFilterQuerySchema.optional().default([]),
+});
+
 export type TicketIdParams = z.infer<typeof ticketIdParamsSchema>;
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+export type BoardFilterQuery = z.infer<typeof boardFilterQuerySchema>;

@@ -1,10 +1,11 @@
 "use client";
 
 import { useAppForm } from "@/components/common/form/hooks";
+import { useDebounced } from "@/lib/hooks/useDebounced";
 import { useProject } from "@/providers/projectProvider";
 import { move } from "@dnd-kit/helpers";
 import type { DragEndEvent, DragOverEvent } from "@dnd-kit/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import useCreateTicket from "../../hooks/useCreateTicket";
@@ -22,8 +23,8 @@ import {
 } from "../lib/utils/boardTickets";
 import type { RepositionResult } from "../lib/utils/boardTickets";
 import {
+  type BoardFilters,
   type Ticket,
-  type TicketPriority,
   type ProjectBoardResponse,
 } from "../types";
 
@@ -41,46 +42,22 @@ export type BoardFilterFormTypes = ReturnType<
   typeof useBoardPage
 >["state"]["filterForm"];
 
-type BoardFilters = {
-  query: string;
-  assignee: string;
-  priority: TicketPriority | "all";
-  type: string;
-  labels: string[];
+const defaultFilters: BoardFilters = {
+  query: "",
+  assignee: "all",
+  priority: "all",
+  type: "all",
+  labels: [],
 };
 
-const matchesFilter = (
-  ticket: TicketsByColumn[string][number],
-  params: BoardFilters,
-): boolean => {
-  const { query, assignee, priority, type, labels } = params;
-
-  if (
-    query &&
-    !(
-      ticket.title.toLowerCase().includes(query.toLowerCase()) ||
-      ticket.ticketKey.toLowerCase().includes(query.toLowerCase())
-    )
-  ) {
-    return false;
-  }
-  if (assignee !== "all") {
-    if (assignee === "unassigned" && ticket.assigneeId) return false;
-    if (assignee !== "unassigned" && ticket.assigneeId !== assignee)
-      return false;
-  }
-  if (priority !== "all" && ticket.priority !== priority) return false;
-  if (type !== "all" && ticket.typeId !== type) return false;
-  if (labels.length > 0) {
-    const ticketLabelIds = new Set(ticket.labels.map((label) => label.id));
-    const hasSelectedLabel = labels.some((labelId) =>
-      ticketLabelIds.has(labelId),
-    );
-    if (!hasSelectedLabel) return false;
-  }
-
-  return true;
-};
+const hasActiveBoardFilters = (filters: BoardFilters) =>
+  Boolean(
+    filters.query.trim() ||
+      filters.assignee !== "all" ||
+      filters.priority !== "all" ||
+      filters.type !== "all" ||
+      filters.labels.length > 0,
+  );
 
 const optimisticReposition = (
   old: ProjectBoardResponse,
@@ -127,6 +104,7 @@ const optimisticCreate = (
 ): ProjectBoardResponse => ({
   ...old,
   totalTicketCount: old.totalTicketCount + 1,
+  filteredTicketCount: old.filteredTicketCount + 1,
   columns: old.columns.map((col) => {
     if (col.id !== columnId) return col;
     const tickets = [...col.tickets, ticket].sort(
@@ -136,19 +114,20 @@ const optimisticCreate = (
   }),
 });
 
-const defaultFilters: BoardFilters = {
-  query: "",
-  assignee: "all",
-  priority: "all",
-  type: "all",
-  labels: [],
-};
-
 const useBoardPage = () => {
   const queryClient = useQueryClient();
   const { activeProject, projectMembers } = useProject();
 
   const [filters, setFilters] = useState<BoardFilters>(defaultFilters);
+  const debouncedQuery = useDebounced(filters.query, 300);
+
+  const apiFilters = useMemo<BoardFilters>(
+    () => ({
+      ...filters,
+      query: debouncedQuery,
+    }),
+    [filters, debouncedQuery],
+  );
 
   const filterForm = useAppForm({
     defaultValues: defaultFilters,
@@ -159,16 +138,20 @@ const useBoardPage = () => {
     },
   });
 
-  const boardQueryKey = projectBoardQueryKey(activeProject?.id ?? "");
+  const projectId = activeProject?.id ?? "";
+  const boardQueryKey = projectBoardQueryKey(projectId, apiFilters);
+  const boardQueryPrefix = ["project-board", projectId] as const;
 
   const {
     data: boardData,
     isPending: isBoardLoading,
+    isFetching: isBoardFetching,
     isError: isBoardError,
   } = useQuery({
     queryKey: boardQueryKey,
-    queryFn: () => getProjectBoard(activeProject!.id),
-    enabled: !!activeProject?.id,
+    queryFn: () => getProjectBoard(projectId, apiFilters),
+    enabled: Boolean(projectId),
+    placeholderData: keepPreviousData,
   });
 
   const columnIds = useMemo(
@@ -177,6 +160,8 @@ const useBoardPage = () => {
   );
 
   const totalCount = boardData?.totalTicketCount ?? 0;
+  const filteredCount = boardData?.filteredTicketCount ?? 0;
+  const isFiltering = hasActiveBoardFilters(apiFilters);
 
   const defaultColumnId = useMemo(() => {
     if (!boardData?.columns.length) return "";
@@ -201,13 +186,13 @@ const useBoardPage = () => {
 
   const repositionMutation = useMutation({
     mutationFn: (vars: { ticketId: string; result: RepositionResult }) =>
-      repositionTicket(activeProject!.id, vars.ticketId, {
+      repositionTicket(projectId, vars.ticketId, {
         columnId: vars.result.columnId,
         position: vars.result.position,
       }),
 
     onMutate: (vars) => {
-      queryClient.cancelQueries({ queryKey: boardQueryKey });
+      queryClient.cancelQueries({ queryKey: boardQueryPrefix });
 
       const snapshot =
         queryClient.getQueryData<ProjectBoardResponse>(boardQueryKey);
@@ -232,7 +217,7 @@ const useBoardPage = () => {
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: boardQueryKey });
+      queryClient.invalidateQueries({ queryKey: boardQueryPrefix });
     },
   });
 
@@ -253,20 +238,22 @@ const useBoardPage = () => {
   } = useCreateTicket({
     columnId: defaultColumnId,
     onCreated: (ticket) => {
-      queryClient.cancelQueries({ queryKey: boardQueryKey });
+      queryClient.cancelQueries({ queryKey: boardQueryPrefix });
       queryClient.setQueryData<ProjectBoardResponse>(
         boardQueryKey,
         (old) => old && optimisticCreate(old, ticket, ticket.columnId),
       );
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: boardQueryKey });
+      queryClient.invalidateQueries({ queryKey: boardQueryPrefix });
     },
   });
 
   const dndHandlers = useMemo(
     () => ({
       onDragStart: () => {
+        if (isFiltering) return;
+
         const data = boardDataRef.current;
         if (!data) return;
 
@@ -276,6 +263,8 @@ const useBoardPage = () => {
       },
 
       onDragOver: (event: DragOverEvent) => {
+        if (isFiltering) return;
+
         const prev = dndBoardRef.current;
         if (!prev) return;
         const next = move(prev, event) as TicketsByColumn;
@@ -284,6 +273,8 @@ const useBoardPage = () => {
       },
 
       onDragEnd: (event: DragEndEvent) => {
+        if (isFiltering) return;
+
         if (event.canceled) {
           setDndBoard(null);
           dragSnapshotRef.current = null;
@@ -330,7 +321,7 @@ const useBoardPage = () => {
         dragSnapshotRef.current = null;
       },
     }),
-    [],
+    [isFiltering],
   );
 
   const columns = useMemo<BoardColumnData[]>(() => {
@@ -338,35 +329,22 @@ const useBoardPage = () => {
 
     return boardData.columns.map((column) => {
       const allInColumn = dndBoard?.[column.id] ?? column.tickets;
-      const items = allInColumn.reduce<BoardColumnData["items"]>(
-        (acc, ticket, dndIndex) => {
-          if (matchesFilter(ticket, filters)) {
-            acc.push({ ticket, dndIndex });
-          }
-          return acc;
-        },
-        [],
-      );
 
       return {
         id: column.id,
         name: column.name,
         color: column.color,
-        items,
+        items: allInColumn.map((ticket, dndIndex) => ({ ticket, dndIndex })),
       };
     });
-  }, [boardData, dndBoard, filters]);
-
-  const filteredCount = useMemo(
-    () => columns.reduce((sum, col) => sum + col.items.length, 0),
-    [columns],
-  );
+  }, [boardData, dndBoard]);
 
   const activeFilterCount =
     (filters.assignee !== "all" ? 1 : 0) +
     (filters.priority !== "all" ? 1 : 0) +
     (filters.type !== "all" ? 1 : 0) +
-    (filters.labels.length > 0 ? 1 : 0);
+    (filters.labels.length > 0 ? 1 : 0) +
+    (filters.query.trim() ? 1 : 0);
 
   const clearFilters = useCallback(() => {
     filterForm.reset();
@@ -391,12 +369,14 @@ const useBoardPage = () => {
       filteredCount,
       totalCount,
       activeFilterCount,
+      isFiltering,
       columns,
       isCreateTicketOpen,
       isSubmittingCreateTicket,
       createTicketForm,
       activeProject,
       isBoardLoading,
+      isBoardFetching,
       isBoardError,
     },
     actions: {

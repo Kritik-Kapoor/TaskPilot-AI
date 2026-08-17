@@ -5,6 +5,7 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 import type {
+  BoardFilterQuery,
   CreateTicketInput,
   TicketIdParams,
   UpdateTicketInput,
@@ -48,9 +49,10 @@ export const createTicketHandler = async (req: Request, res: Response) => {
 export const getProjectTicketsHandler = async (req: Request, res: Response) => {
   try {
     const { projectId } = req.validated!.params as ProjectIdParams;
+    const filters = req.validated!.query as BoardFilterQuery | undefined;
     const { userId, orgId } = getWorkspaceUser(req);
 
-    const board = await getProjectTickets(orgId, userId, projectId);
+    const board = await getProjectTickets(orgId, userId, projectId, filters);
 
     return new ApiResponse(
       200,

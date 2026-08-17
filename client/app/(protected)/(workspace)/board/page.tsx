@@ -23,6 +23,8 @@ const BoardPage = () => {
           columns={state.columns}
           dndHandlers={actions.dndHandlers}
           isLoading={state.isBoardLoading}
+          isFetching={state.isBoardFetching}
+          dragDisabled={state.isFiltering}
         />
       </div>
 

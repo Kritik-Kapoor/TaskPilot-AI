@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import type {
+  BoardFilterQuery,
   CreateTicketInput,
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
@@ -209,7 +210,6 @@ const resolveInsertPosition = async (
   return getAppendPosition(maxPosition);
 };
 
-/** Re-index a column when integer gaps between neighbours are exhausted. */
 export const normalizeColumnPositionsIfNeeded = async (
   columnId: string,
   position: number,
@@ -289,16 +289,82 @@ export const createTicket = async (
   });
 };
 
+const nonBacklogColumnFilter = { name: { not: BACKLOG_COLUMN_NAME } } as const;
+
+const hasActiveBoardFilters = (filters?: BoardFilterQuery) => {
+  if (!filters) return false;
+
+  return Boolean(
+    filters.query ||
+    filters.assignee !== "all" ||
+    filters.priority !== "all" ||
+    filters.type !== "all" ||
+    filters.labels.length > 0,
+  );
+};
+
+const buildBoardTicketWhere = (
+  filters?: BoardFilterQuery,
+): Prisma.TicketWhereInput | undefined => {
+  if (!hasActiveBoardFilters(filters) || !filters) return undefined;
+
+  const where: Prisma.TicketWhereInput = {};
+
+  if (filters.query) {
+    where.OR = [
+      { title: { contains: filters.query, mode: "insensitive" } },
+      { ticketKey: { contains: filters.query, mode: "insensitive" } },
+    ];
+  }
+
+  if (filters.assignee !== "all") {
+    where.assigneeId =
+      filters.assignee === "unassigned" ? null : filters.assignee;
+  }
+
+  if (filters.priority !== "all") where.priority = filters.priority;
+
+  if (filters.type !== "all") where.typeId = filters.type;
+
+  if (filters.labels.length > 0) {
+    where.labels = {
+      some: {
+        id: { in: filters.labels },
+      },
+    };
+  }
+
+  return where;
+};
+
+const buildBoardTicketCountWhere = (
+  projectId: string,
+  filters?: BoardFilterQuery,
+): Prisma.TicketWhereInput => {
+  const ticketFilter = buildBoardTicketWhere(filters);
+
+  return {
+    AND: [
+      { projectId },
+      { column: nonBacklogColumnFilter },
+      ...(ticketFilter ? [ticketFilter] : []),
+    ],
+  };
+};
+
 export const getProjectTickets = async (
   orgId: string,
   userId: string,
   projectId: string,
+  filters?: BoardFilterQuery,
 ) => {
   await assertProjectAccess(userId, orgId, projectId);
 
-  const [columns, totalTicketCount] = await Promise.all([
+  const ticketFilter = buildBoardTicketWhere(filters);
+
+  const [columns, totalTicketCount, filteredTicketCount] = await Promise.all([
     prisma.boardColumn.findMany({
-      where: { projectId, name: { not: BACKLOG_COLUMN_NAME } },
+      where: { projectId, ...nonBacklogColumnFilter },
       orderBy: { position: "asc" },
       select: {
         id: true,
@@ -306,6 +372,7 @@ export const getProjectTickets = async (
         color: true,
         position: true,
         tickets: {
+          ...(ticketFilter ? { where: ticketFilter } : {}),
           orderBy: { position: "asc" },
           select: ticketBaseSelect,
         },
@@ -314,12 +381,15 @@ export const getProjectTickets = async (
     prisma.ticket.count({
       where: {
         projectId,
-        column: { name: { not: BACKLOG_COLUMN_NAME } },
+        column: nonBacklogColumnFilter,
       },
+    }),
+    prisma.ticket.count({
+      where: buildBoardTicketCountWhere(projectId, filters),
     }),
   ]);
 
-  return { columns, totalTicketCount };
+  return { columns, totalTicketCount, filteredTicketCount };
 };
 
 const columnSelect = {

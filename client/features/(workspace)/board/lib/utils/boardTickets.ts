@@ -2,6 +2,7 @@ import type {
   ApiColumnWithTickets,
   Ticket,
   RepositionTicketPayload,
+  BoardFilters,
 } from "../../types";
 import { getPositionBetween } from "../../lib/utils/ticketPosition";
 
@@ -55,4 +56,17 @@ export const findTicketLocation = (
     if (index !== -1) return { columnId, index };
   }
   return null;
+};
+
+export const buildBoardFilterSearchParams = (filters: BoardFilters) => {
+  const params = new URLSearchParams();
+
+  const query = filters.query.trim();
+  if (query) params.set("query", query);
+  if (filters.assignee !== "all") params.set("assignee", filters.assignee);
+  if (filters.priority !== "all") params.set("priority", filters.priority);
+  if (filters.type !== "all") params.set("type", filters.type);
+  filters.labels.forEach((labelId) => params.append("labels", labelId));
+
+  return params;
 };

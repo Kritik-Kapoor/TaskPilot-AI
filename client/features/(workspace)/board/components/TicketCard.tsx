@@ -14,9 +14,15 @@ type TicketCardProps = {
   ticket: Ticket;
   index: number;
   columnId: string;
+  dragDisabled?: boolean;
 };
 
-const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
+const TicketCard = ({
+  ticket,
+  index,
+  columnId,
+  dragDisabled,
+}: TicketCardProps) => {
   const router = useRouter();
   const { projectMembers, buildWorkspacePath } = useProject();
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -27,6 +33,7 @@ const TicketCard = ({ ticket, index, columnId }: TicketCardProps) => {
     type: "item",
     accept: "item",
     group: columnId,
+    disabled: dragDisabled,
   });
 
   const assignee = projectMembers?.find(

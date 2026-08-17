@@ -18,6 +18,7 @@ import {
   ticketCommentParamsSchema,
 } from "../schemas/comment.schema.js";
 import {
+  boardFilterQuerySchema,
   createTicketSchema,
   ticketIdParamsSchema,
   updateTicketSchema,
@@ -31,6 +32,7 @@ router.post("/", validate(createTicketSchema), createTicketHandler);
 router.get(
   "/project-board/:projectId",
   validate(projectIdParamsSchema, "params"),
+  validate(boardFilterQuerySchema, "query"),
   getProjectTicketsHandler,
 );
 
