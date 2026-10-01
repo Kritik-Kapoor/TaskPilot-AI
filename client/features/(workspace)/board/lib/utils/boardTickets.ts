@@ -63,7 +63,7 @@ export const buildBoardFilterSearchParams = (filters: BoardFilters) => {
 
   const query = filters.query.trim();
   if (query) params.set("query", query);
-  if (filters.assignee !== "all") params.set("assignee", filters.assignee);
+  filters.assignee.forEach((assigneeId) => params.append("assignee", assigneeId));
   if (filters.priority !== "all") params.set("priority", filters.priority);
   if (filters.type !== "all") params.set("type", filters.type);
   filters.labels.forEach((labelId) => params.append("labels", labelId));

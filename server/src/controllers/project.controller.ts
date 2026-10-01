@@ -40,7 +40,12 @@ import {
   sendProjectJoinRequest,
   updateProjectDetails,
 } from "../services/project.service.js";
-import { getIssueTypesWithCounts } from "../services/ticketType.service.js";
+import {
+  createIssueType as createIssueTypeService,
+  getIssueTypesWithCounts,
+} from "../services/ticketType.service.js";
+import { TicketServiceError } from "../services/ticket.service.js";
+import { getWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
 
 export const createProject = async (req: Request, res: Response) => {
@@ -862,45 +867,23 @@ export const updateIssueType = async (req: Request, res: Response) => {
 
 export const createIssueType = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.user!;
+    const { userId, orgId } = getWorkspaceUser(req);
     const { projectId } = req.validated!.params as ProjectIdParams;
     const { key, color } = req.validated!.body as CreateIssueTypeBody;
 
-    const memberAccess = await getProjectMembership(userId, projectId);
-
-    if (memberAccess?.role !== "ADMIN") {
-      return new ApiResponse(
-        403,
-        null,
-        "Only project admins can create issue types",
-      ).send(res);
-    }
-
-    const newType = await prisma.issueType.create({
-      data: { key: key.toLowerCase(), color, projectId, isEnabled: true },
-      select: {
-        id: true,
-        key: true,
-        color: true,
-        isEnabled: true,
-        _count: { select: { tickets: true } },
-      },
+    const newType = await createIssueTypeService(orgId, userId, projectId, {
+      key,
+      color,
     });
-
-    const { _count, ...rest } = newType;
 
     return new ApiResponse(
       201,
-      { ...rest, ticketCount: _count.tickets },
+      newType,
       "Issue type created successfully",
     ).send(res);
   } catch (error) {
-    if (isDuplicateNameError(error)) {
-      return new ApiResponse(
-        409,
-        null,
-        "An issue type with that key already exists",
-      ).send(res);
+    if (error instanceof TicketServiceError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
     }
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

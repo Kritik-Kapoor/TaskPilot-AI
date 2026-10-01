@@ -12,6 +12,12 @@ import {
 } from "../utils/ticketPosition.utils.js";
 import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
 import { Prisma } from "../generated/prisma/client.js";
+import {
+  AssignmentDateParseError,
+  AssignmentTimeZoneError,
+  buildAssignmentCreatedAtFilter,
+  DEFAULT_ASSIGNMENT_TIME_ZONE,
+} from "../utils/assignmentDate.utils.js";
 
 export class TicketServiceError extends Error {
   statusCode: number;
@@ -296,7 +302,7 @@ const hasActiveBoardFilters = (filters?: BoardFilterQuery) => {
 
   return Boolean(
     filters.query ||
-    filters.assignee !== "all" ||
+    filters.assignee.length > 0 ||
     filters.priority !== "all" ||
     filters.type !== "all" ||
     filters.labels.length > 0,
@@ -317,9 +323,19 @@ const buildBoardTicketWhere = (
     ];
   }
 
-  if (filters.assignee !== "all") {
-    where.assigneeId =
-      filters.assignee === "unassigned" ? null : filters.assignee;
+  if (filters.assignee.length > 0) {
+    const hasUnassigned = filters.assignee.includes("unassigned");
+    const assigneeIds = filters.assignee.filter((id) => id !== "unassigned");
+
+    if (hasUnassigned && assigneeIds.length > 0) {
+      where.AND = [
+        { OR: [{ assigneeId: null }, { assigneeId: { in: assigneeIds } }] },
+      ];
+    } else if (hasUnassigned) {
+      where.assigneeId = null;
+    } else {
+      where.assigneeId = { in: assigneeIds };
+    }
   }
 
   if (filters.priority !== "all") where.priority = filters.priority;
@@ -572,6 +588,276 @@ export const updateTicket = async (
       select: ticketBaseSelect,
     });
   });
+};
+
+const parseAssignmentDateFilter = (
+  timeZone: string,
+  date?: string,
+  dateRange?: { from: string; to: string },
+): Prisma.TicketWhereInput | null => {
+  try {
+    return buildAssignmentCreatedAtFilter(timeZone, date, dateRange);
+  } catch (error) {
+    if (
+      error instanceof AssignmentDateParseError ||
+      error instanceof AssignmentTimeZoneError ||
+      error instanceof Error
+    ) {
+      throw new TicketServiceError(400, error.message);
+    }
+    throw error;
+  }
+};
+
+const assignmentTicketSelect = {
+  id: true,
+  ticketKey: true,
+  title: true,
+  assigneeId: true,
+} satisfies Prisma.TicketSelect;
+
+const resolveTicketsForAssignment = async (
+  projectId: string,
+  selector: {
+    ticketKeys?: string[];
+    date?: string;
+    dateRange?: { from: string; to: string };
+    timeZone?: string;
+  },
+) => {
+  const selectorsProvided = [
+    (selector.ticketKeys?.length ?? 0) > 0,
+    Boolean(selector.date),
+    Boolean(selector.dateRange),
+  ].filter(Boolean).length;
+
+  if (selectorsProvided === 0) {
+    throw new TicketServiceError(
+      400,
+      "Please specify which tickets to assign. Provide ticket keys, a date, or a date range.",
+    );
+  }
+
+  if (selectorsProvided > 1) {
+    throw new TicketServiceError(
+      400,
+      "Please specify only one of: ticket keys, a date, or a date range. Don't provide multiple selectors.",
+    );
+  }
+
+  if (selector.ticketKeys?.length) {
+    const requestedKeys = selector.ticketKeys.map((key) => key.trim());
+
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        projectId,
+        ticketKey: { in: requestedKeys, mode: "insensitive" },
+      },
+      select: assignmentTicketSelect,
+    });
+
+    const foundKeys = new Set(
+      tickets.map((ticket) => ticket.ticketKey.toLowerCase()),
+    );
+
+    const notFoundKeys = requestedKeys.filter(
+      (key) => !foundKeys.has(key.toLowerCase()),
+    );
+
+    return { tickets, notFoundKeys };
+  }
+
+  const dateFilter = parseAssignmentDateFilter(
+    selector.timeZone ?? DEFAULT_ASSIGNMENT_TIME_ZONE,
+    selector.date,
+    selector.dateRange,
+  );
+
+  const tickets = await prisma.ticket.findMany({
+    where: { projectId, ...dateFilter },
+    select: assignmentTicketSelect,
+  });
+
+  return { tickets, notFoundKeys: [] as string[] };
+};
+
+const buildReassignmentComment = (
+  actorName: string,
+  targetName: string,
+): Prisma.InputJsonValue => ({
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: `${actorName} re-assigned this ticket to ${targetName}.`,
+        },
+      ],
+    },
+  ],
+});
+
+export type AssignTicketsInput = {
+  projectId: string;
+  assigneeId: string;
+  ticketKeys?: string[];
+  date?: string;
+  dateRange?: { from: string; to: string };
+  /** IANA timezone from the client (e.g. Asia/Kolkata). Defaults to UTC. */
+  timeZone?: string;
+};
+
+export type AssignTicketsResult = {
+  assigned: { id: string; ticketKey: string; title: string }[];
+  reassigned: { id: string; ticketKey: string; title: string }[];
+  skipped: { ticketKey: string; reason: string }[];
+};
+
+// Permission rules:
+// -VIEWERs can't assign/re-assign anything.
+// - Only MEMBER/ADMIN project members can be assignment targets.
+// - A MEMBER may only assign unassigned tickets to themselves.
+// - A MEMBER may only re-assign tickets assigned to them.
+// - An ADMIN may assign/re-assign any ticket to anyone in the project except VIEWERs.
+// - Re-assigning a ticket to its current assignee is reported as skipped.
+
+export const assignOrReassignTickets = async (
+  orgId: string,
+  userId: string,
+  input: AssignTicketsInput,
+): Promise<AssignTicketsResult> => {
+  const { membership } = await assertProjectAccess(
+    userId,
+    orgId,
+    input.projectId,
+  );
+
+  if (membership.role === "VIEWER") {
+    throw new TicketServiceError(
+      403,
+      "You do not have permission to assign tickets in this project",
+    );
+  }
+
+  const isAdmin = membership.role === "ADMIN";
+
+  const targetMembership = await getProjectMembership(
+    input.assigneeId,
+    input.projectId,
+  );
+
+  if (!targetMembership) {
+    throw new TicketServiceError(
+      400,
+      "Assignee must be a member of this project",
+    );
+  }
+
+  if (targetMembership.role === "VIEWER") {
+    throw new TicketServiceError(
+      400,
+      "Tickets cannot be assigned to a project member with view only access",
+    );
+  }
+
+  const { tickets, notFoundKeys } = await resolveTicketsForAssignment(
+    input.projectId,
+    input,
+  );
+
+  const result: AssignTicketsResult = {
+    assigned: [],
+    reassigned: [],
+    skipped: [],
+  };
+
+  for (const key of notFoundKeys) {
+    result.skipped.push({
+      ticketKey: key,
+      reason: "Ticket not found in this project",
+    });
+  }
+
+  if (tickets.length === 0) return result;
+
+  const [actor, target] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: input.assigneeId },
+      select: { username: true },
+    }),
+  ]);
+
+  const actorName = actor?.username ?? "Someone";
+  const targetName = target?.username ?? "another user";
+
+  for (const ticket of tickets) {
+    if (ticket.assigneeId === input.assigneeId) {
+      result.skipped.push({
+        ticketKey: ticket.ticketKey,
+        reason: "This ticket is already assigned to that user",
+      });
+      continue;
+    }
+
+    if (ticket.assigneeId === null) {
+      if (!isAdmin && input.assigneeId !== userId) {
+        result.skipped.push({
+          ticketKey: ticket.ticketKey,
+          reason: "You can only assign unassigned tickets to yourself",
+        });
+        continue;
+      }
+
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { assigneeId: input.assigneeId },
+      });
+
+      result.assigned.push({
+        id: ticket.id,
+        ticketKey: ticket.ticketKey,
+        title: ticket.title,
+      });
+      continue;
+    }
+
+    if (!isAdmin && ticket.assigneeId !== userId) {
+      result.skipped.push({
+        ticketKey: ticket.ticketKey,
+        reason:
+          "You can only re-assign tickets that are currently assigned to you",
+      });
+      continue;
+    }
+
+    await prisma.$transaction([
+      prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { assigneeId: input.assigneeId },
+      }),
+      prisma.comment.create({
+        data: {
+          ticketId: ticket.id,
+          userId,
+          content: buildReassignmentComment(actorName, targetName),
+        },
+      }),
+    ]);
+
+    result.reassigned.push({
+      id: ticket.id,
+      ticketKey: ticket.ticketKey,
+      title: ticket.title,
+    });
+  }
+
+  return result;
 };
 
 export const deleteTicket = async (

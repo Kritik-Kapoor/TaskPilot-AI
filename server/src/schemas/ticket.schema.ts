@@ -97,7 +97,7 @@ export const updateTicketSchema = z
     }
   });
 
-const labelsFilterQuerySchema = z.preprocess((value) => {
+const toStringArray = (value: unknown) => {
   if (value === undefined || value === null || value === "") return [];
   if (Array.isArray(value)) return value;
   if (typeof value === "string") {
@@ -107,14 +107,19 @@ const labelsFilterQuerySchema = z.preprocess((value) => {
       .filter(Boolean);
   }
   return [];
-}, z.array(z.uuid("Invalid label ID")));
+};
 
 export const boardFilterQuerySchema = z.object({
   query: z.string().trim().optional(),
   assignee: z
-    .union([z.literal("all"), z.literal("unassigned"), z.uuid("Invalid assignee ID")])
+    .preprocess(
+      toStringArray,
+      z.array(
+        z.union([z.literal("unassigned"), z.uuid("Invalid assignee ID")]),
+      ),
+    )
     .optional()
-    .default("all"),
+    .default([]),
   priority: z
     .union([z.literal("all"), ticketPrioritySchema])
     .optional()
@@ -123,7 +128,10 @@ export const boardFilterQuerySchema = z.object({
     .union([z.literal("all"), z.uuid("Invalid issue type ID")])
     .optional()
     .default("all"),
-  labels: labelsFilterQuerySchema.optional().default([]),
+  labels: z
+    .preprocess(toStringArray, z.array(z.uuid("Invalid label ID")))
+    .optional()
+    .default([]),
 });
 
 export type TicketIdParams = z.infer<typeof ticketIdParamsSchema>;

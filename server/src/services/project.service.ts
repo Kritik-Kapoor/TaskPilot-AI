@@ -3,6 +3,7 @@ import { ensureOrgOwnerIsProjectAdmin } from "../utils/projectMember.utils.js";
 import { seedDefaultBoardColumns } from "./boardColumn.service.js";
 import { seedDefaultIssueTypes } from "./ticketType.service.js";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
+import { ApiError } from "../utils/apiResponse.js";
 
 export const normalizeProjectName = (name: string) => name.toLowerCase();
 
@@ -203,8 +204,6 @@ export const normalizeProjectMemberObject = ({
   username: user.username,
   email: user.email,
 });
-
-import { ApiError } from "../utils/apiResponse.js";
 
 const projectJoinRequestSelect = {
   id: true,

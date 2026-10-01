@@ -54,7 +54,7 @@ export type ProjectBoardResponse = {
 
 export type BoardFilters = {
   query: string;
-  assignee: string;
+  assignee: string[];
   priority: TicketPriority | "all";
   type: string;
   labels: string[];

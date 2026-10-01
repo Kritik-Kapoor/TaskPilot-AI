@@ -5,7 +5,12 @@ import { useDebounced } from "@/lib/hooks/useDebounced";
 import { useProject } from "@/providers/projectProvider";
 import { move } from "@dnd-kit/helpers";
 import type { DragEndEvent, DragOverEvent } from "@dnd-kit/react";
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import useCreateTicket from "../../hooks/useCreateTicket";
@@ -44,7 +49,7 @@ export type BoardFilterFormTypes = ReturnType<
 
 const defaultFilters: BoardFilters = {
   query: "",
-  assignee: "all",
+  assignee: [],
   priority: "all",
   type: "all",
   labels: [],
@@ -53,10 +58,10 @@ const defaultFilters: BoardFilters = {
 const hasActiveBoardFilters = (filters: BoardFilters) =>
   Boolean(
     filters.query.trim() ||
-      filters.assignee !== "all" ||
-      filters.priority !== "all" ||
-      filters.type !== "all" ||
-      filters.labels.length > 0,
+    filters.assignee.length > 0 ||
+    filters.priority !== "all" ||
+    filters.type !== "all" ||
+    filters.labels.length > 0,
   );
 
 const optimisticReposition = (
@@ -340,7 +345,7 @@ const useBoardPage = () => {
   }, [boardData, dndBoard]);
 
   const activeFilterCount =
-    (filters.assignee !== "all" ? 1 : 0) +
+    (filters.assignee.length > 0 ? 1 : 0) +
     (filters.priority !== "all" ? 1 : 0) +
     (filters.type !== "all" ? 1 : 0) +
     (filters.labels.length > 0 ? 1 : 0) +
@@ -356,8 +361,22 @@ const useBoardPage = () => {
       const current = filterForm.getFieldValue("assignee");
       filterForm.setFieldValue(
         "assignee",
-        current === memberId ? "all" : memberId,
+        current.includes(memberId)
+          ? current.filter((id) => id !== memberId)
+          : [...current, memberId],
       );
+    },
+    [filterForm],
+  );
+
+  const applyFilters = useCallback(
+    (incoming: Partial<BoardFilters>) => {
+      const merged = { ...defaultFilters, ...incoming };
+      setFilters(merged);
+      filterForm.reset();
+      for (const [key, value] of Object.entries(merged)) {
+        filterForm.setFieldValue(key as keyof BoardFilters, value as never);
+      }
     },
     [filterForm],
   );
@@ -381,6 +400,7 @@ const useBoardPage = () => {
     },
     actions: {
       clearFilters,
+      applyFilters,
       toggleAssigneeFilter,
       openCreateTicketDialog,
       closeCreateTicketDialog,

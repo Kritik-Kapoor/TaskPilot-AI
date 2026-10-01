@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.route.js";
 import organizationRoutes from "./routes/organization.route.js";
 import projectRoutes from "./routes/project.route.js";
 import ticketRoutes from "./routes/ticket.route.js";
+import aiRoutes from "./ai/ai.route.js";
 import helmet from "helmet";
 import { authenticateWorkspaceUser } from "./middlewares/authenticateWorkspaceUser.middleware.js";
 
@@ -39,6 +40,7 @@ app.use("/auth", authRoutes);
 app.use("/organization", organizationRoutes);
 app.use("/project", authenticateWorkspaceUser, projectRoutes);
 app.use("/ticket", authenticateWorkspaceUser, ticketRoutes);
+app.use("/ai", authenticateWorkspaceUser, aiRoutes);
 
 app.listen(3001, () => {
   console.log("Server is running on port 3001");

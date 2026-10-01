@@ -3,6 +3,7 @@ const PROJECT_SCOPED_PATHS = new Set([
   "/board",
   "/backlog",
   "/inbox",
+  "/assistant",
   "/members",
   "/settings",
   "/project-join-request",

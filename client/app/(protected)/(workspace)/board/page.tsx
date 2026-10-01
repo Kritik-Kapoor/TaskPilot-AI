@@ -5,11 +5,43 @@ import CreateTicketForm from "@/features/(workspace)/components/CreateTicketForm
 import BoardColumns from "@/features/(workspace)/board/components/BoardColumns";
 import BoardToolbar from "@/features/(workspace)/board/components/BoardToolbar";
 import useBoardPage from "@/features/(workspace)/board/hooks/useBoardPage";
+import { useAiChat } from "@/features/(workspace)/ai/AiChatProvider";
 import { formatDisplayName } from "@/lib/utils/common";
 import { ChevronRight } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 const BoardPage = () => {
   const { state, actions } = useBoardPage();
+  const { pendingAction, consumeAction } = useAiChat();
+  const appliedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      !pendingAction ||
+      appliedRef.current ||
+      (pendingAction.type !== "navigate_board" && pendingAction.type !== "create_ticket")
+    ) {
+      return;
+    }
+
+    appliedRef.current = true;
+
+    if (pendingAction.type === "navigate_board") {
+      actions.applyFilters({
+        query: pendingAction.filters.query ?? "",
+        assignee: pendingAction.filters.assignee ?? [],
+        priority: (pendingAction.filters.priority as "all") ?? "all",
+        type: pendingAction.filters.type ?? "all",
+        labels: pendingAction.filters.labels ?? [],
+      });
+    }
+
+    consumeAction();
+
+    return () => {
+      appliedRef.current = false;
+    };
+  }, [pendingAction, consumeAction, actions]);
 
   const projectName = state.activeProject
     ? formatDisplayName(state.activeProject.projectName)

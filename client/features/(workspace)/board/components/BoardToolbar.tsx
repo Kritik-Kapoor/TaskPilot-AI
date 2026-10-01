@@ -35,8 +35,20 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
     [projectLabels],
   );
 
+  const assigneeOptions = useMemo(
+    () => [
+      { value: "unassigned", label: "Unassigned" },
+      ...members.map((member) => ({
+        value: member.id,
+        label: member.username,
+        color: getColor(member.username),
+      })),
+    ],
+    [members],
+  );
+
   return (
-    <div className="shrink-0 space-y-3 border-b border-border bg-background pb-4">
+    <div className="shrink-0 space-y-3 border-b border-border bg-background pb-4 px-0.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Board</h1>
@@ -70,20 +82,16 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
 
         <filterForm.AppField name="assignee">
           {(field) => (
-            <field.Select
-              hideLabel
-              label="Assignee"
-              placeholder="Assignee"
-              controlClassName="h-9 w-40"
-            >
-              <SelectItem value="all">All assignees</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.username}
-                </SelectItem>
-              ))}
-            </field.Select>
+            <div className="w-40">
+              <field.MultiSelect
+                hideLabel
+                label="Assignee"
+                placeholder="Assignee"
+                displayValueType="count"
+                emptyMessage="No members found."
+                options={assigneeOptions}
+              />
+            </div>
           )}
         </filterForm.AppField>
 
@@ -166,7 +174,7 @@ const BoardToolbar = ({ state, actions }: BoardToolbarProps) => {
                   onClick={() => toggleAssigneeFilter(member.id)}
                   className={cn(
                     "grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white ring-2 ring-background transition-transform hover:-translate-y-0.5",
-                    assignee === member.id && "ring-brand",
+                    assignee.includes(member.id) && "ring-brand",
                   )}
                   style={{ background: getColor(member.username) }}
                   title={member.username}
