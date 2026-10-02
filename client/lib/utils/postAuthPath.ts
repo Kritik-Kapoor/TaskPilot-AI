@@ -32,5 +32,5 @@ export const getPostAuthPath = (user: User) => {
     return `/onboarding/create-project?org=${slugify(user.organizationName)}`;
   }
 
-  return "/dashboard";
+  return "/board";
 };

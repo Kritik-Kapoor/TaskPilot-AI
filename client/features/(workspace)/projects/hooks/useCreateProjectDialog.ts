@@ -36,7 +36,7 @@ const useCreateProjectDialog = () => {
       setIsOpen(false);
       form.reset();
 
-      const basePath = isProjectScopedPath(pathname) ? pathname : "/dashboard";
+      const basePath = isProjectScopedPath(pathname) ? pathname : "/board";
       const params = new URLSearchParams(searchParams.toString());
       params.set("projectId", project.id);
       router.push(`${basePath}?${params.toString()}`);

@@ -60,7 +60,7 @@ const PostAuthGuard = ({ children }: PostAuthGuardProps) => {
       hasCompletedOnboarding(user) &&
       shouldRedirectCompletedUserFromOnboarding(pathname)
     ) {
-      router.replace("/dashboard");
+      router.replace("/board");
     }
   }, [pathname, router, user]);
 

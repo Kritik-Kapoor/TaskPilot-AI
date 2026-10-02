@@ -8,7 +8,7 @@ import useDonePage from "@/features/(onboarding)/hooks/useDonePage";
 
 const DonePage = () => {
   const {
-    state: { progress, statusLabel, projectName, shouldInitialize, dashboardHref },
+    state: { progress, statusLabel, projectName, shouldInitialize, boardHref },
   } = useDonePage();
 
   const subtitle = projectName
@@ -39,7 +39,7 @@ const DonePage = () => {
           asChild
           className="mt-8 bg-gradient-brand text-brand-foreground shadow-elegant hover:opacity-95"
         >
-          <Link href={dashboardHref}>Go to dashboard</Link>
+          <Link href={boardHref}>Go to board</Link>
         </Button>
       )}
     </div>

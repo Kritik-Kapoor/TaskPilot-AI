@@ -24,7 +24,6 @@ import {
   Building2,
   FolderKanban,
   Inbox,
-  LayoutDashboard,
   List,
   Settings,
   SlidersHorizontal,
@@ -40,7 +39,6 @@ import { ProjectConfigurationDialog } from "@/features/(workspace)/configuration
 import type { ConfigurationSection } from "@/features/(workspace)/configuration/types";
 
 const WORKSPACE_NAV = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Board", href: "/board", icon: SquareKanban },
   { title: "Backlog", href: "/backlog", icon: List },
   { title: "Inbox", href: "/inbox", icon: Inbox },

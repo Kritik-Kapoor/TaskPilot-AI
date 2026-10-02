@@ -9,7 +9,7 @@ const INITIALIZATION_DURATION_MS = 3000;
 
 const INITIALIZATION_STEPS = [
   { threshold: 0, label: "Initializing your workspace..." },
-  { threshold: 35, label: "Setting up your dashboard..." },
+  { threshold: 35, label: "Setting up your board..." },
   { threshold: 70, label: "Almost ready..." },
 ] as const;
 
@@ -29,9 +29,9 @@ const useDonePage = () => {
 
   const projectName = projectSlug ? deSlugify(projectSlug) : null;
   const shouldInitialize = Boolean(projectSlug);
-  const dashboardHref = projectId
-    ? workspacePath("/dashboard", projectId)
-    : "/dashboard";
+  const boardHref = projectId
+    ? workspacePath("/board", projectId)
+    : "/board";
 
   const [progress, setProgress] = useState(0);
   const [statusLabel, setStatusLabel] = useState<string>(
@@ -55,14 +55,14 @@ const useDonePage = () => {
     }, 50);
 
     const timeoutId = window.setTimeout(() => {
-      router.push(dashboardHref);
+      router.push(boardHref);
     }, INITIALIZATION_DURATION_MS);
 
     return () => {
       window.clearInterval(intervalId);
       window.clearTimeout(timeoutId);
     };
-  }, [dashboardHref, shouldInitialize, router]);
+  }, [boardHref, shouldInitialize, router]);
 
   return {
     state: {
@@ -70,7 +70,7 @@ const useDonePage = () => {
       statusLabel,
       projectName,
       shouldInitialize,
-      dashboardHref,
+      boardHref,
     },
   };
 };

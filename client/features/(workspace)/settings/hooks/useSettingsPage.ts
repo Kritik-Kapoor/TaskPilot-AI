@@ -91,7 +91,7 @@ const useSettingsPage = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      router.push("/dashboard");
+      router.push("/board");
       toast.success("Project deleted");
     },
     onError: (error) => {

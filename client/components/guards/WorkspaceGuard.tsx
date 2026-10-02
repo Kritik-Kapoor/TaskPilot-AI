@@ -8,11 +8,11 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
-type DashboardGuardProps = {
+type WorkspaceGuardProps = {
   children: ReactNode;
 };
 
-const DashboardGuard = ({ children }: DashboardGuardProps) => {
+const WorkspaceGuard = ({ children }: WorkspaceGuardProps) => {
   const { user } = useAuth();
   const router = useRouter();
 
@@ -29,4 +29,4 @@ const DashboardGuard = ({ children }: DashboardGuardProps) => {
   return children;
 };
 
-export default DashboardGuard;
+export default WorkspaceGuard;

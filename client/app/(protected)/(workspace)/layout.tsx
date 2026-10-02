@@ -4,7 +4,7 @@ import { AppSidebar } from "@/components/common/Sidebar";
 import ProjectRoleWarningBannerSlot from "@/components/common/ProjectRoleWarningBannerSlot";
 import WorkspaceNavbar from "@/components/common/WorkspaceNavbar";
 import ProjectMembershipGuard from "@/components/guards/ProjectMembershipGuard";
-import DashboardGuard from "@/components/guards/DashboardGuard";
+import WorkspaceGuard from "@/components/guards/WorkspaceGuard";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiChatProvider } from "@/features/(workspace)/ai/AiChatProvider";
@@ -34,13 +34,13 @@ function WorkspaceInner({ children }: { children: React.ReactNode }) {
 
 const WorkspaceLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <DashboardGuard>
+    <WorkspaceGuard>
       <Suspense fallback={null}>
         <ProjectProvider>
           <WorkspaceInner>{children}</WorkspaceInner>
         </ProjectProvider>
       </Suspense>
-    </DashboardGuard>
+    </WorkspaceGuard>
   );
 };
 

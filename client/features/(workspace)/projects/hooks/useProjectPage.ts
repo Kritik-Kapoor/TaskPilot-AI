@@ -97,7 +97,7 @@ const useProjectPage = () => {
   const openProject = useCallback(
     (project: Project) => {
       handleSetActiveProjectId(project.id);
-      router.push(buildWorkspacePath("/dashboard"));
+      router.push(buildWorkspacePath("/board"));
     },
     [buildWorkspacePath, handleSetActiveProjectId, router],
   );

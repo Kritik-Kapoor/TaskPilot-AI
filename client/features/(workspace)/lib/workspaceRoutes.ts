@@ -1,5 +1,4 @@
 const PROJECT_SCOPED_PATHS = new Set([
-  "/dashboard",
   "/board",
   "/backlog",
   "/inbox",
