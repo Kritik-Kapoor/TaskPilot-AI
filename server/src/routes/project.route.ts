@@ -9,20 +9,19 @@ import {
   deleteLabel,
   deleteProject,
   deleteProjectMember,
-  getIncomingProjectJoinRequestsHandler,
   getLabels,
   getProject,
   getProjectBoardColumns,
   getProjectMembers,
   getProjectTicketTypes,
   getUserRoleInProject,
+  joinDefaultProject,
   patchProjectMember,
   reorderBoardColumns,
-  reviewProjectJoinRequestHandler,
-  sendProjectJoinRequestHandler,
   updateBoardColumn,
   updateLabel,
   updateProject,
+  updateProjectDefaultStatus,
   updateProjectMember,
   updateIssueType,
 } from "../controllers/project.controller.js";
@@ -35,13 +34,12 @@ import {
   createProjectSchema,
   patchProjectMemberBodySchema,
   projectIdParamsSchema,
-  projectJoinRequestIdParamsSchema,
   projectMemberUserIdParamsSchema,
   reorderBoardColumnsBodySchema,
-  reviewProjectJoinRequestBodySchema,
   updateLabelParamsSchema,
   updateProjectMemberBodySchema,
   updateProjectMemberParamsSchema,
+  updateProjectDefaultParamsSchema,
   updateProjectSchema,
   updateIssueTypeBodySchema,
   updateIssueTypeParamsSchema,
@@ -51,6 +49,8 @@ import { getUserRoleInProjectSchema } from "../schemas/auth.schema.js";
 const router = Router();
 
 router.post("/create", validate(createProjectSchema), createProject);
+
+router.post("/join-default", joinDefaultProject);
 
 router.get(
   "/:projectId",
@@ -69,6 +69,12 @@ router.patch(
   validate(projectIdParamsSchema, "params"),
   validate(updateProjectSchema),
   updateProject,
+);
+
+router.patch(
+  "/:projectId/default/:isDefault",
+  validate(updateProjectDefaultParamsSchema, "params"),
+  updateProjectDefaultStatus,
 );
 
 router.post(
@@ -186,25 +192,6 @@ router.delete(
   "/:projectId/ticket-types/:typeId",
   validate(updateIssueTypeParamsSchema, "params"),
   deleteIssueType,
-);
-
-router.post(
-  "/:projectId/join-request",
-  validate(projectIdParamsSchema, "params"),
-  sendProjectJoinRequestHandler,
-);
-
-router.get(
-  "/:projectId/join-requests",
-  validate(projectIdParamsSchema, "params"),
-  getIncomingProjectJoinRequestsHandler,
-);
-
-router.patch(
-  "/:projectId/join-requests/:requestId",
-  validate(projectJoinRequestIdParamsSchema, "params"),
-  validate(reviewProjectJoinRequestBodySchema),
-  reviewProjectJoinRequestHandler,
 );
 
 export default router;

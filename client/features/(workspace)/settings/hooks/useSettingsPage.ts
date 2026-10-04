@@ -2,7 +2,6 @@
 
 import { useAppForm } from "@/components/common/form/hooks";
 import { deleteProject, updateProject } from "@/features/(workspace)/api";
-import type { Project } from "@/features/(workspace)/types";
 import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,12 +38,6 @@ const settingsSchema = z.object({
     }),
 });
 
-const getProjectFormValues = (project: Project) => ({
-  projectName: project.projectName,
-  projectKey: project.projectKey,
-  description: project.description ?? "",
-});
-
 const useSettingsPage = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -60,7 +53,8 @@ const useSettingsPage = () => {
     [isProjectAdmin, user?.organizationRole],
   );
 
-  const canDelete = isProjectAdmin;
+  const isDefaultProject = activeProject?.isDefault ?? false;
+  const canDelete = isProjectAdmin && !isDefaultProject;
 
   const updateMutation = useMutation({
     mutationFn: (payload: { name: string; description: string | null }) => {
@@ -101,12 +95,22 @@ const useSettingsPage = () => {
     },
   });
 
+  const projectId = activeProject?.id;
+  const projectName = activeProject?.projectName ?? "";
+  const projectKey = activeProject?.projectKey ?? "";
+  const projectDescription = activeProject?.description ?? "";
+
+  const defaultValues = useMemo(
+    () => ({
+      projectName,
+      projectKey,
+      description: projectDescription,
+    }),
+    [projectName, projectKey, projectDescription],
+  );
+
   const form = useAppForm({
-    defaultValues: {
-      projectName: "",
-      projectKey: "",
-      description: "",
-    },
+    defaultValues,
     validators: {
       onSubmit: settingsSchema,
     },
@@ -121,10 +125,10 @@ const useSettingsPage = () => {
   });
 
   useEffect(() => {
-    if (!activeProject) return;
+    if (!projectId) return;
 
-    form.reset(getProjectFormValues(activeProject));
-  }, [activeProject, form]);
+    form.reset(defaultValues);
+  }, [projectId, defaultValues, form]);
 
   const openDeleteDialog = useCallback(() => {
     setIsDeleteDialogOpen(true);
@@ -144,6 +148,7 @@ const useSettingsPage = () => {
     form,
     canManage,
     canDelete,
+    isDefaultProject,
     isLoading,
     isSaving: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,

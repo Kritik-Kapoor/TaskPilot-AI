@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  optionalDescriptionSchema,
-  updateDescriptionSchema,
-} from "./common.schema.js";
+import { optionalDescriptionSchema } from "./common.schema.js";
 
 export const orgNameSchema = z
   .string()
@@ -17,7 +14,7 @@ export const createOrganizationSchema = z.object({
 export const updateOrganizationSchema = z
   .object({
     orgName: orgNameSchema.optional(),
-    description: updateDescriptionSchema.optional(),
+    description: optionalDescriptionSchema,
   })
   .superRefine((data, ctx) => {
     if (data.orgName === undefined && data.description === undefined) {
@@ -28,58 +25,5 @@ export const updateOrganizationSchema = z
     }
   });
 
-export const searchOrganizationsQuerySchema = z.object({
-  q: z.string().trim().optional(),
-});
-
-export const checkOrganizationNameQuerySchema = z.object({
-  name: z.string().trim().optional(),
-});
-
-export const organizationIdParamsSchema = z.object({
-  orgId: z.uuid("Invalid organization ID"),
-});
-
-export const transferOwnershipParamsSchema = z.object({
-  newOwnerId: z.uuid("Invalid user ID"),
-});
-
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
-export type SearchOrganizationsQuery = z.infer<
-  typeof searchOrganizationsQuerySchema
->;
-export type CheckOrganizationNameQuery = z.infer<
-  typeof checkOrganizationNameQuerySchema
->;
-export type OrganizationIdParams = z.infer<typeof organizationIdParamsSchema>;
-export type TransferOwnershipParams = z.infer<
-  typeof transferOwnershipParamsSchema
->;
-
-export const joinRequestIdParamsSchema = z.object({
-  requestId: z.uuid("Invalid join request ID"),
-});
-
-export const reviewJoinRequestBodySchema = z.object({
-  action: z.enum(["approve", "decline"]),
-});
-
-export type JoinRequestIdParams = z.infer<typeof joinRequestIdParamsSchema>;
-export type ReviewJoinRequestBody = z.infer<typeof reviewJoinRequestBodySchema>;
-
-export const organizationUserIdParamsSchema = z.object({
-  userId: z.uuid("Invalid user ID"),
-});
-
-export const updateOrganizationUserBodySchema = z.object({
-  organizationRole: z.enum(["ADMIN", "MEMBER"]),
-  projectIds: z.array(z.uuid("Invalid project ID")),
-});
-
-export type OrganizationUserIdParams = z.infer<
-  typeof organizationUserIdParamsSchema
->;
-export type UpdateOrganizationUserBody = z.infer<
-  typeof updateOrganizationUserBodySchema
->;

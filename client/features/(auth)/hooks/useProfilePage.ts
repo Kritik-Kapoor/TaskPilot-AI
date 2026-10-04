@@ -16,6 +16,16 @@ const profileSchema = z.object({
   email: z.string(),
 });
 
+// Query key prefixes whose cached data includes a user's username.
+const USERNAME_DEPENDENT_QUERY_KEYS = [
+  ["project-members"],
+  ["project-board"],
+  ["project-backlog"],
+  ["ticket"],
+  ["ticket-comments"],
+  ["projects"],
+] as const;
+
 const useProfilePage = () => {
   const queryClient = useQueryClient();
   const { user, isLoading, logout } = useAuth();
@@ -25,6 +35,9 @@ const useProfilePage = () => {
     mutationFn: updateProfile,
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(["me"], updatedUser);
+      for (const queryKey of USERNAME_DEPENDENT_QUERY_KEYS) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
       toast.success("Profile updated");
     },
     onError: (error) => {

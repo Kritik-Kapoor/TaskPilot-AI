@@ -3,6 +3,7 @@
 import {
   isTicketDescriptionEmpty,
   normalizeTicketDescription,
+  trimTicketDescription,
 } from "@/components/common/ticket-editor/ticketDescription";
 import { useProject } from "@/providers/projectProvider";
 import type { JSONContent } from "@tiptap/core";
@@ -172,9 +173,10 @@ const useTicketDetails = (ticketId: string) => {
   const saveDescription = useCallback(() => {
     if (!canEdit || !ticketQuery.data || editedDescription === null) return;
 
-    const payload = isTicketDescriptionEmpty(editedDescription)
+    const trimmed = trimTicketDescription(editedDescription);
+    const payload: JSONContent | null = isTicketDescriptionEmpty(trimmed)
       ? null
-      : editedDescription;
+      : (trimmed as JSONContent);
 
     patchTicket({ description: payload });
   }, [canEdit, editedDescription, patchTicket, ticketQuery.data]);

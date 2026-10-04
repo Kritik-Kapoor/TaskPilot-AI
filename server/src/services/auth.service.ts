@@ -75,6 +75,48 @@ const mapUserAuthPayload = (user: {
   })),
 });
 
+export const createUserInDefaultWorkspace = async (input: {
+  username: string;
+  email: string;
+  passwordHash: string;
+}) => {
+  const defaultProject = await prisma.project.findFirst({
+    where: { isDefault: true },
+    select: { id: true, organizationId: true },
+  });
+
+  if (!defaultProject) {
+    throw new ApiError(
+      500,
+      "Default project is not configured. Please contact the administrator.",
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        username: input.username,
+        email: input.email,
+        passwordHash: input.passwordHash,
+        isPrivacyPolicyAccepted: true,
+        organizationId: defaultProject.organizationId,
+        organizationRole: "ADMIN",
+      },
+      select: { id: true, organizationId: true },
+    });
+
+    await tx.projectMember.create({
+      data: {
+        userId: user.id,
+        projectId: defaultProject.id,
+        role: "ADMIN",
+      },
+    });
+
+    return user;
+  });
+};
+
 export const getUserAuthPayload = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },

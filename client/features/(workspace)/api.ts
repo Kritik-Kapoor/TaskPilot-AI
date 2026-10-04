@@ -10,6 +10,12 @@ export const getProjects = () =>
     fallbackErrorMessage: "Failed to fetch projects",
   });
 
+export const joinDefaultProject = () =>
+  apiFetch<{ projectId: string }>("/project/join-default", {
+    method: "POST",
+    fallbackErrorMessage: "Failed to join the default project",
+  });
+
 export const getProjectMembers = (projectId: string) =>
   apiFetch<ProjectMember[]>(`/project/${projectId}/members`, {
     fallbackErrorMessage: "Failed to fetch project members",
@@ -60,8 +66,20 @@ export const deleteProject = (projectId: string) =>
     fallbackErrorMessage: "Failed to delete project",
   });
 
-export const sendProjectJoinRequest = (projectId: string) =>
-  apiFetch<null>(`/project/${projectId}/join-request`, {
+export type CreateProjectPayload = {
+  name: string;
+  description?: string;
+};
+
+export const createProject = (payload: CreateProjectPayload) =>
+  apiFetch<{
+    project: {
+      id: string;
+      projectName: string;
+      description: string | null;
+    };
+  }>("/project/create", {
     method: "POST",
-    fallbackErrorMessage: "Failed to send join request",
+    body: payload,
+    fallbackErrorMessage: "Failed to create project",
   });

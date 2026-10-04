@@ -5,7 +5,6 @@ const PROJECT_SCOPED_PATHS = new Set([
   "/assistant",
   "/members",
   "/settings",
-  "/project-join-request",
 ]);
 
 export const isProjectScopedPath = (pathname: string) => {
@@ -17,11 +16,7 @@ export const isProjectScopedPath = (pathname: string) => {
 };
 
 export const ORG_ACCESSIBLE_PATHS = new Set([
-  "/projects",
-  "/organization",
   "/profile",
-  "/join-request",
-  "/user-management",
 ]);
 
 export const isOrgAccessiblePath = (pathname: string) =>

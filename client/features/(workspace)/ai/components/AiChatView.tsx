@@ -51,14 +51,24 @@ function ActionBadge({ action }: { action: AiAction }) {
         </span>
       );
     case "assign_tickets": {
-      const total = action.assigned.length + action.reassigned.length;
+      const updated = action.results.filter(
+        (r) => r.assigned.length + r.reassigned.length > 0,
+      );
+      const total = updated.reduce(
+        (sum, r) => sum + r.assigned.length + r.reassigned.length,
+        0,
+      );
+      const skipped =
+        action.skipped.length +
+        action.results.reduce((sum, r) => sum + r.skipped.length, 0);
+      const names = [...new Set(updated.map((r) => r.assignee.username))];
       return (
         <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-600">
           <UserCheck className="h-3 w-3" />
           {total > 0
-            ? `${total} ticket${total > 1 ? "s" : ""} → ${action.assignee.username}`
+            ? `${total} ticket${total > 1 ? "s" : ""} → ${names.join(", ")}`
             : "No tickets updated"}
-          {action.skipped.length > 0 && ` (${action.skipped.length} skipped)`}
+          {skipped > 0 && ` (${skipped} skipped)`}
         </span>
       );
     }

@@ -13,6 +13,7 @@ const SettingsPage = () => {
     form,
     canManage,
     canDelete,
+    isDefaultProject,
     isLoading,
     isSaving,
     isDeleting,
@@ -52,6 +53,13 @@ const SettingsPage = () => {
           canManage={canManage}
           isSaving={isSaving}
         />
+
+        {isDefaultProject && (
+          <p className="max-w-md border-t pt-6 text-sm text-muted-foreground">
+            This is the default project every member joins, so it can&apos;t be
+            deleted.
+          </p>
+        )}
 
         {canDelete && (
           <div className="max-w-md space-y-2 border-t pt-6">

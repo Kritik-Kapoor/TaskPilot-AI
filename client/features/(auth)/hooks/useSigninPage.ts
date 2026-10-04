@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useAppForm } from "@/components/common/form/hooks";
 import { loginUser } from "@/features/(auth)/api";
-import { getPostAuthPath } from "@/lib/utils/postAuthPath";
 
 const loginFormSchema = z.object({
   email: z.email({ message: "Invalid email address" }),
@@ -31,7 +30,7 @@ const useSigninPage = () => {
     mutationFn: loginUser,
     onSuccess: (user) => {
       queryClient.setQueryData(["me"], user);
-      router.push(getPostAuthPath(user));
+      router.push("/board");
     },
     onError: (error) => {
       toast.error(error.message || "Invalid credentials");

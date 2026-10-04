@@ -21,14 +21,14 @@ const validateDescriptionLength = (value: string, ctx: z.RefinementCtx) => {
 };
 
 export const optionalDescriptionSchema = z
-  .string()
-  .trim()
-  .superRefine(validateDescriptionLength)
-  .transform((value) => value || undefined)
+  .union([z.null(), z.string()])
+  .transform((value) => {
+    if (value === null) return null;
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  })
+  .superRefine((value, ctx) => {
+    if (value === null) return;
+    validateDescriptionLength(value, ctx);
+  })
   .optional();
-
-export const updateDescriptionSchema = z
-  .string()
-  .trim()
-  .superRefine(validateDescriptionLength)
-  .transform((value) => (value ? value : null));

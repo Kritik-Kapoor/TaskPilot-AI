@@ -18,6 +18,7 @@ type DndHandlers = {
 type BoardColumnsProps = {
   columns: BoardColumnData[];
   dndHandlers: DndHandlers;
+  onAddTicket?: (columnId: string) => void;
   isLoading?: boolean;
   isFetching?: boolean;
   dragDisabled?: boolean;
@@ -26,9 +27,11 @@ type BoardColumnsProps = {
 function DroppableColumn({
   column,
   dragDisabled,
+  onAddTicket,
 }: {
   column: BoardColumnData;
   dragDisabled?: boolean;
+  onAddTicket?: (columnId: string) => void;
 }) {
   const { ref, isDropTarget } = useDroppable({
     id: column.id,
@@ -60,6 +63,7 @@ function DroppableColumn({
           type="button"
           className="text-muted-foreground hover:text-foreground"
           aria-label={`Add ticket to ${column.name}`}
+          onClick={() => onAddTicket?.(column.id)}
         >
           <Plus className="h-4 w-4" />
         </button>
@@ -89,6 +93,7 @@ function DroppableColumn({
 const BoardColumns = ({
   columns,
   dndHandlers,
+  onAddTicket,
   isLoading,
   isFetching,
   dragDisabled,
@@ -127,6 +132,7 @@ const BoardColumns = ({
               key={column.id}
               column={column}
               dragDisabled={dragDisabled}
+              onAddTicket={onAddTicket}
             />
           ))}
         </div>

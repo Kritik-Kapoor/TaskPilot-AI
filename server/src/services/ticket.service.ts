@@ -5,6 +5,7 @@ import type {
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
 import { findProjectInOrg, getProjectMembership } from "./project.service.js";
+import { normalizeStoredTicketDescription } from "../utils/ticketDescription.utils.js";
 import {
   getAppendPosition,
   getPositionBetween,
@@ -271,13 +272,20 @@ export const createTicket = async (
 
     const ticketKey = await generateTicketKey(project.id, project.projectKey);
 
+    const description = normalizeStoredTicketDescription(input.description);
+
     return tx.ticket.create({
       data: {
         projectId: input.projectId,
         columnId: column.id,
         ticketKey,
         title: input.title,
-        description: input.description as Prisma.InputJsonValue | undefined,
+        ...(description !== undefined && {
+          description:
+            description === null
+              ? Prisma.DbNull
+              : (description as Prisma.InputJsonValue),
+        }),
         priority: input.priority ?? "MEDIUM",
         typeId: input.typeId ?? null,
         assigneeId: input.assigneeId ?? null,
@@ -566,10 +574,14 @@ export const updateTicket = async (
       data: {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.description !== undefined && {
-          description:
-            input.description === null
+          description: (() => {
+            const normalized = normalizeStoredTicketDescription(
+              input.description,
+            );
+            return normalized === null
               ? Prisma.DbNull
-              : (input.description as Prisma.InputJsonValue),
+              : (normalized as Prisma.InputJsonValue);
+          })(),
         }),
         ...(input.priority !== undefined && { priority: input.priority }),
         ...(input.typeId !== undefined && { typeId: input.typeId }),
@@ -616,15 +628,19 @@ const assignmentTicketSelect = {
   assigneeId: true,
 } satisfies Prisma.TicketSelect;
 
-const resolveTicketsForAssignment = async (
-  projectId: string,
-  selector: {
-    ticketKeys?: string[];
-    date?: string;
-    dateRange?: { from: string; to: string };
-    timeZone?: string;
-  },
-) => {
+type AssignmentSelector = {
+  ticketKeys?: string[];
+  date?: string;
+  dateRange?: { from: string; to: string };
+  timeZone?: string;
+};
+
+/**
+ * Throws a TicketServiceError unless exactly one selector (ticket keys, a date
+ * or a date range) is provided and any date is valid. Exported so callers that
+ * run several assignments can validate all of them before applying any.
+ */
+export const assertValidAssignmentSelector = (selector: AssignmentSelector) => {
   const selectorsProvided = [
     (selector.ticketKeys?.length ?? 0) > 0,
     Boolean(selector.date),
@@ -644,6 +660,21 @@ const resolveTicketsForAssignment = async (
       "Please specify only one of: ticket keys, a date, or a date range. Don't provide multiple selectors.",
     );
   }
+
+  if (selector.date || selector.dateRange) {
+    parseAssignmentDateFilter(
+      selector.timeZone ?? DEFAULT_ASSIGNMENT_TIME_ZONE,
+      selector.date,
+      selector.dateRange,
+    );
+  }
+};
+
+const resolveTicketsForAssignment = async (
+  projectId: string,
+  selector: AssignmentSelector,
+) => {
+  assertValidAssignmentSelector(selector);
 
   if (selector.ticketKeys?.length) {
     const requestedKeys = selector.ticketKeys.map((key) => key.trim());

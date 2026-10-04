@@ -11,6 +11,7 @@ import {
   EMPTY_TICKET_DESCRIPTION,
   getTicketDescriptionTextLength,
   isTicketDescriptionEmpty,
+  trimTicketDescription,
 } from "@/components/common/ticket-editor/ticketDescription";
 import type { JSONContent } from "@tiptap/core";
 import { isUuid, type Ticket, type TicketPriority } from "../board/types";
@@ -58,14 +59,8 @@ export const createTicketFormSchema = z.object({
 });
 
 type UseCreateTicketOptions = {
-  /**
-   * Resolved column UUID to create the ticket in. Callers are responsible
-   * for resolving this from their own fetched data (board columns / backlog column).
-   */
   columnId: string;
-  /** Called on success so callers can update their own cache optimistically. */
   onCreated: (ticket: Ticket) => void;
-  /** Called when the mutation settles so callers can invalidate their queries. */
   onSettled?: () => void;
 };
 
@@ -76,6 +71,8 @@ const useCreateTicket = ({
 }: UseCreateTicketOptions) => {
   const { activeProject } = useProject();
   const [isOpen, setIsOpen] = useState(false);
+  const [overrideColumnId, setOverrideColumnId] = useState<string | null>(null);
+  const targetColumnId = overrideColumnId ?? columnId;
 
   // mutation is defined before form intentionally — the onSuccess closure
   // captures `form` by reference; by the time onSuccess fires all hooks
@@ -121,7 +118,7 @@ const useCreateTicket = ({
         return;
       }
 
-      if (!columnId) {
+      if (!targetColumnId) {
         toast.error("Target column is not available yet");
         return;
       }
@@ -133,18 +130,20 @@ const useCreateTicket = ({
             ? value.assigneeId
             : null;
 
-      const description = isTicketDescriptionEmpty(value.description)
+      const trimmedDescription = trimTicketDescription(value.description);
+      const description = isTicketDescriptionEmpty(trimmedDescription)
         ? undefined
-        : value.description;
+        : trimmedDescription;
 
       const typeId =
         value.typeId && value.typeId !== "none" ? value.typeId : null;
 
       await mutation.mutateAsync({
         projectId: activeProject.id,
-        columnId,
+        columnId: targetColumnId,
         title: value.title.trim(),
-        ...(description && { description }),
+        ...(description &&
+          typeof description !== "string" && { description }),
         priority: value.priority,
         assigneeId,
         typeId,
@@ -156,10 +155,14 @@ const useCreateTicket = ({
     },
   });
 
-  const open = useCallback(() => {
-    form.reset();
-    setIsOpen(true);
-  }, [form]);
+  const open = useCallback(
+    (columnIdOverride?: string) => {
+      form.reset();
+      setOverrideColumnId(columnIdOverride ?? null);
+      setIsOpen(true);
+    },
+    [form],
+  );
 
   const close = useCallback(() => {
     setIsOpen(false);

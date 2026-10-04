@@ -54,6 +54,7 @@ const BoardPage = () => {
         <BoardColumns
           columns={state.columns}
           dndHandlers={actions.dndHandlers}
+          onAddTicket={actions.openCreateTicketDialog}
           isLoading={state.isBoardLoading}
           isFetching={state.isBoardFetching}
           dragDisabled={state.isFiltering}

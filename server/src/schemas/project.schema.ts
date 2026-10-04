@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  optionalDescriptionSchema,
-  updateDescriptionSchema,
-} from "./common.schema.js";
+import { optionalDescriptionSchema } from "./common.schema.js";
 
 export const projectRoleSchema = z.enum(["ADMIN", "MEMBER", "VIEWER"]);
 
@@ -10,6 +7,15 @@ export const projectMemberActionSchema = z.enum(["add", "remove", "update"]);
 
 export const projectIdParamsSchema = z.object({
   projectId: z.uuid("Invalid project ID"),
+});
+
+export const updateProjectDefaultParamsSchema = z.object({
+  projectId: z.uuid("Invalid project ID"),
+  isDefault: z
+    .enum(["true", "false"], {
+      error: "Default status must be either true or false",
+    })
+    .transform((value) => value === "true"),
 });
 
 export const createProjectSchema = z.object({
@@ -27,7 +33,7 @@ export const updateProjectSchema = z
       .trim()
       .min(2, "Project name must be at least 2 characters long")
       .optional(),
-    description: updateDescriptionSchema.optional(),
+    description: optionalDescriptionSchema,
   })
   .superRefine((data, ctx) => {
     if (data.name === undefined && data.description === undefined) {
@@ -82,15 +88,56 @@ export const updateIssueTypeParamsSchema = z.object({
   typeId: z.uuid("Invalid ticket type ID"),
 });
 
-export const updateIssueTypeBodySchema = z.object({
-  isEnabled: z.boolean(),
-  key: z.string().trim().min(2, "Key must be at least 2 characters"),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
-});
+const issueTypeKeySchema = z
+  .string({ error: "Key is required" })
+  .trim()
+  .min(2, "Key must be at least 2 characters");
+
+const issueTypeColorSchema = z
+  .string({ error: "Color is required" })
+  .trim()
+  .min(1, "Color is required")
+  .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color");
+
+export const updateIssueTypeBodySchema = z
+  .object({
+    isEnabled: z.boolean().optional(),
+    key: issueTypeKeySchema.optional(),
+    color: issueTypeColorSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasKey = data.key !== undefined;
+    const hasColor = data.color !== undefined;
+    const hasIsEnabled = data.isEnabled !== undefined;
+
+    if (hasKey && !hasColor) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Color is required when key is provided",
+        path: ["color"],
+      });
+    }
+
+    if (hasColor && !hasKey) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Key is required when color is provided",
+        path: ["key"],
+      });
+    }
+
+    if (!hasKey && !hasColor && !hasIsEnabled) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Provide isEnabled to toggle the issue type, or both key and color to update its details",
+      });
+    }
+  });
 
 export const createIssueTypeBodySchema = z.object({
-  key: z.string().trim().min(2, "Key must be at least 2 characters"),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color"),
+  key: issueTypeKeySchema,
+  color: issueTypeColorSchema,
 });
 
 export const boardColumnParamsSchema = z.object({
@@ -130,19 +177,10 @@ export type ProjectMemberUserIdParams = z.infer<
 export type PatchProjectMemberBody = z.infer<
   typeof patchProjectMemberBodySchema
 >;
-export const projectJoinRequestIdParamsSchema = z.object({
-  projectId: z.uuid("Invalid project ID"),
-  requestId: z.uuid("Invalid join request ID"),
-});
-
-export const reviewProjectJoinRequestBodySchema = z.object({
-  action: z.enum(["approve", "decline"]),
-});
-
+export type UpdateProjectDefaultParams = z.infer<
+  typeof updateProjectDefaultParamsSchema
+>;
 export type CreateLabelBody = z.infer<typeof createLabelBodySchema>;
 export type UpdateLabelParams = z.infer<typeof updateLabelParamsSchema>;
 export type UpdateIssueTypeParams = z.infer<typeof updateIssueTypeParamsSchema>;
 export type UpdateIssueTypeBody = z.infer<typeof updateIssueTypeBodySchema>;
-export type ProjectJoinRequestIdParams = z.infer<
-  typeof projectJoinRequestIdParamsSchema
->;

@@ -41,7 +41,7 @@ const useSignupPage = () => {
     mutationFn: registerUser,
     onSuccess: (user) => {
       queryClient.setQueryData(["me"], user);
-      router.push("/onboarding");
+      router.push("/board");
     },
     onError: (error) => {
       toast.error(error.message || "Failed to register");

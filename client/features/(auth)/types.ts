@@ -30,7 +30,3 @@ export type RegisterInputs = {
   password: string;
   isPrivacyPolicyAccepted: boolean;
 };
-
-export type SignInResponse = User & {
-  hasJoinedOrg: boolean;
-};

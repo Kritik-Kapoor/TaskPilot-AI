@@ -8,8 +8,13 @@ import {
 import bcrypt from "bcryptjs";
 import { issueAuthTokens } from "../utils/generateToken.js";
 import { clearAuthCookies, REFRESH_COOKIE_NAME } from "../utils/authCookie.js";
-import type { SigninInput, SignupInput, UpdateProfileInput } from "../schemas/auth.schema.js";
+import type {
+  SigninInput,
+  SignupInput,
+  UpdateProfileInput,
+} from "../schemas/auth.schema.js";
 import {
+  createUserInDefaultWorkspace,
   getUserAuthPayload,
   refreshAuthSession,
   updateUserProfile,
@@ -29,25 +34,21 @@ export const signup = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        passwordHash: hashedPassword,
-        isPrivacyPolicyAccepted: true,
-      },
+    const user = await createUserInDefaultWorkspace({
+      username,
+      email,
+      passwordHash: hashedPassword,
     });
 
-    issueAuthTokens(res, { userId: user.id, orgId: null });
+    issueAuthTokens(res, { userId: user.id, orgId: user.organizationId });
 
-    return new ApiResponse(
-      200,
-      {
-        username: user.username,
-        email: user.email,
-      },
-      "Signup successful",
-    ).send(res);
+    const authUser = await getUserAuthPayload(user.id);
+
+    if (!authUser) {
+      return new ApiResponse(404, null, "User not found").send(res);
+    }
+
+    return new ApiResponse(200, authUser, "Signup successful").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

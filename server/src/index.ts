@@ -37,7 +37,7 @@ app.use("/health", (_req, res) => {
   return new ApiResponse(200, null, "SERVER IS CONNECTED").send(res);
 });
 app.use("/auth", authRoutes);
-app.use("/organization", organizationRoutes);
+app.use("/organization", authenticateWorkspaceUser, organizationRoutes);
 app.use("/project", authenticateWorkspaceUser, projectRoutes);
 app.use("/ticket", authenticateWorkspaceUser, ticketRoutes);
 app.use("/ai", authenticateWorkspaceUser, aiRoutes);

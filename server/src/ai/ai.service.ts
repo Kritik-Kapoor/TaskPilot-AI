@@ -41,10 +41,14 @@ For assignee filters, pass an "assignees" array — one entry per person:
 The user may combine these, e.g. "show tickets for me and jane@company.com" → assignees: ["current_user", "jane@company.com"].
 If they refer to another person by name without an email, do NOT call filter_board at all — ask for that person's email instead.
 
-For assign_tickets, the "assignee" is a single target ("current_user" or one email address), and you must
-pick exactly one ticket selector: ticketKeys (e.g. ["TB-101", "TB-102"]), date (a single YYYY-MM-DD), or
-dateRange ({from, to}). If a person is named without an email, do NOT call assign_tickets — ask for their
-email instead. If the user doesn't say which tickets, ask them to clarify rather than guessing.
+For assign_tickets, pass an "assignments" array with ONE entry per person. Each entry has an "assignee"
+("current_user" or one email address) and exactly one ticket selector: ticketKeys (e.g. ["TB-101", "TB-102"]),
+date (a single YYYY-MM-DD), or dateRange ({from, to}).
+- "Assign TB-1 to a@x.com and TB-2 to b@x.com" → two entries.
+- "Assign TB-1 and TB-2 to a@x.com" → one entry with two ticketKeys.
+- Never list the same ticket under two different people.
+If a person is named without an email, do NOT call assign_tickets — ask for their email instead. If the user
+doesn't say which tickets, ask them to clarify rather than guessing.
 
 Keep text responses brief and friendly. Always use a tool when the user's intent matches one.
 If you cannot determine the user's intent, ask a clarifying question, do NOT make assumptions.`;
@@ -76,6 +80,9 @@ export async function processAiChat(
     ],
     tools: aiTools,
     tool_choice: "auto",
+    // Only the first tool call is executed, so make the model batch multiple
+    // assignees into one assign_tickets call instead of emitting several.
+    parallel_tool_calls: false,
   });
 
   const choice = completion.choices[0]!;
@@ -154,26 +161,49 @@ export async function processAiChat(
         >;
 
         const parts: string[] = [];
-        if (action.assigned.length > 0) {
-          parts.push(
-            `Assigned ${action.assigned.map((t) => t.ticketKey).join(", ")} to ${action.assignee.username}`,
-          );
+        for (const result of action.results) {
+          const name = result.assignee.username;
+
+          if (result.assigned.length > 0) {
+            parts.push(
+              `Assigned ${result.assigned.map((t) => t.ticketKey).join(", ")} to ${name}`,
+            );
+          }
+          if (result.reassigned.length > 0) {
+            parts.push(
+              `Re-assigned ${result.reassigned.map((t) => t.ticketKey).join(", ")} to ${name}`,
+            );
+          }
+          if (result.skipped.length > 0) {
+            parts.push(
+              `Skipped ${result.skipped.map((s) => `${s.ticketKey} (${s.reason})`).join(", ")}`,
+            );
+          }
         }
-        if (action.reassigned.length > 0) {
-          parts.push(
-            `Re-assigned ${action.reassigned.map((t) => t.ticketKey).join(", ")} to ${action.assignee.username}`,
-          );
-        }
+
         if (action.skipped.length > 0) {
           parts.push(
             `Skipped ${action.skipped.map((s) => `${s.ticketKey} (${s.reason})`).join(", ")}`,
           );
         }
 
-        responseText =
-          parts.length > 0
-            ? `Done. ${parts.join("; ")}.`
-            : "No matching tickets were found for that request.";
+        const updatedCount = action.results.reduce(
+          (sum, r) => sum + r.assigned.length + r.reassigned.length,
+          0,
+        );
+        const skippedCount =
+          action.skipped.length +
+          action.results.reduce((sum, r) => sum + r.skipped.length, 0);
+
+        if (updatedCount === 0 && skippedCount === 0) {
+          responseText = "No matching tickets were found for that request.";
+        } else if (skippedCount === 0) {
+          responseText = `Done. ${parts.join("; ")}.`;
+        } else if (updatedCount === 0) {
+          responseText = `No changes were made. ${parts.join("; ")}.`;
+        } else {
+          responseText = `Partially done. ${parts.join("; ")}.`;
+        }
         break;
       }
 

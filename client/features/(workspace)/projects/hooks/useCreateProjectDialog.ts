@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppForm } from "@/components/common/form/hooks";
-import { createProject } from "@/features/(onboarding)/api";
+import { createProject } from "@/features/(workspace)/api";
 import { isProjectScopedPath } from "@/features/(workspace)/lib/workspaceRoutes";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";

@@ -3,8 +3,6 @@
 import { AppSidebar } from "@/components/common/Sidebar";
 import ProjectRoleWarningBannerSlot from "@/components/common/ProjectRoleWarningBannerSlot";
 import WorkspaceNavbar from "@/components/common/WorkspaceNavbar";
-import ProjectMembershipGuard from "@/components/guards/ProjectMembershipGuard";
-import WorkspaceGuard from "@/components/guards/WorkspaceGuard";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiChatProvider } from "@/features/(workspace)/ai/AiChatProvider";
@@ -23,7 +21,7 @@ function WorkspaceInner({ children }: { children: React.ReactNode }) {
             <ProjectRoleWarningBannerSlot />
             <WorkspaceNavbar />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6">
-              <ProjectMembershipGuard>{children}</ProjectMembershipGuard>
+              {children}
             </div>
           </SidebarInset>
         </SidebarProvider>
@@ -34,13 +32,11 @@ function WorkspaceInner({ children }: { children: React.ReactNode }) {
 
 const WorkspaceLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <WorkspaceGuard>
-      <Suspense fallback={null}>
-        <ProjectProvider>
-          <WorkspaceInner>{children}</WorkspaceInner>
-        </ProjectProvider>
-      </Suspense>
-    </WorkspaceGuard>
+    <Suspense fallback={null}>
+      <ProjectProvider>
+        <WorkspaceInner>{children}</WorkspaceInner>
+      </ProjectProvider>
+    </Suspense>
   );
 };
 

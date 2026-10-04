@@ -1,5 +1,3 @@
-import type { JoinRequestStatus } from "@/features/(onboarding)/types";
-
 export type ProjectMemberPreview = {
   username: string;
 };
@@ -14,7 +12,7 @@ export type Project = {
   memberPreview: ProjectMemberPreview[];
   isJoined: boolean;
   role: string | null;
-  joinRequestStatus: JoinRequestStatus | null;
+  isDefault: boolean;
 };
 
 export type ProjectMember = {

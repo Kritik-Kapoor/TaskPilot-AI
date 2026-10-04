@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 import ProjectSwitcher from "@/components/common/ProjectSwitcher";
-import useAuth from "@/lib/hooks/useAuth";
 import { useProject } from "@/providers/projectProvider";
 import { useAiChat } from "@/features/(workspace)/ai/AiChatProvider";
 import {
@@ -21,17 +20,12 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import {
-  Building2,
-  FolderKanban,
   Inbox,
   List,
   Settings,
   SlidersHorizontal,
   Sparkles,
   SquareKanban,
-  User,
-  UserCog,
-  UserPlus,
   Users,
 } from "lucide-react";
 import { CONFIGURATION_SECTIONS } from "@/features/(workspace)/configuration/lib/constants";
@@ -48,38 +42,17 @@ const WORKSPACE_NAV = [
 
 const PROJECT_ADMIN_NAV = [
   { title: "Settings", href: "/settings", icon: Settings },
-  {
-    title: "Project Join Requests",
-    href: "/project-join-request",
-    icon: UserPlus,
-  },
-] as const;
-
-const ORG_NAV = [
-  { title: "Projects", href: "/projects", icon: FolderKanban },
-  { title: "Organization", href: "/organization", icon: Building2 },
-  { title: "Profile", href: "/profile", icon: User },
-] as const;
-
-const ORG_ADMIN_NAV = [
-  { title: "Join Requests", href: "/join-request", icon: UserPlus },
-  { title: "User Management", href: "/user-management", icon: UserCog },
 ] as const;
 
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
-  const { isProjectAdmin, hasJoinedProjects, buildWorkspacePath, projectRole } =
-    useProject();
+  const { isProjectAdmin, buildWorkspacePath, projectRole } = useProject();
   const { pendingAction, consumeAction } = useAiChat();
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configSection, setConfigSection] =
     useState<ConfigurationSection>("labels");
-
-  const isOrgAdmin =
-    user?.organizationRole === "OWNER" || user?.organizationRole === "ADMIN";
 
   const canManageLabels = projectRole !== "VIEWER";
 
@@ -118,62 +91,38 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent>
-          {hasJoinedProjects ? (
-            <SidebarGroup>
-              <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {WORKSPACE_NAV.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === item.href}
-                        tooltip={item.title}
-                      >
-                        <Link href={buildWorkspacePath(item.href)}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-
-                  <SidebarMenuItem>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {WORKSPACE_NAV.map((item) => (
+                  <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                      isActive={isConfigOpen}
-                      tooltip="Configuration"
-                      onClick={() => setIsConfigOpen(true)}
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.title}
                     >
-                      <SlidersHorizontal />
-                      <span>Configuration</span>
+                      <Link href={buildWorkspacePath(item.href)}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ) : (
-            <SidebarGroup>
-              <SidebarGroupLabel>Organization</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {ORG_NAV.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === item.href}
-                        tooltip={item.title}
-                      >
-                        <Link href={item.href}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                ))}
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={isConfigOpen}
+                    tooltip="Configuration"
+                    onClick={() => setIsConfigOpen(true)}
+                  >
+                    <SlidersHorizontal />
+                    <span>Configuration</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
           {isProjectAdmin && (
             <SidebarGroup>
@@ -188,30 +137,6 @@ export function AppSidebar() {
                         tooltip={item.title}
                       >
                         <Link href={buildWorkspacePath(item.href)}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {isOrgAdmin && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Organization Management</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {ORG_ADMIN_NAV.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === item.href}
-                        tooltip={item.title}
-                      >
-                        <Link href={item.href}>
                           <item.icon />
                           <span>{item.title}</span>
                         </Link>

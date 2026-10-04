@@ -1,7 +1,10 @@
 import { prisma } from "../config/db.js";
 import { AiChatError } from "./ai.errors.js";
-import type { AiAction } from "./ai.types.js";
+import type { AiAction, AssignTicketsActionResult } from "./ai.types.js";
+import { MAX_ASSIGNMENTS_PER_REQUEST } from "./ai.tools.js";
 import {
+  TicketServiceError,
+  assertValidAssignmentSelector,
   assignOrReassignTickets,
   createTicket as createTicketService,
 } from "../services/ticket.service.js";
@@ -94,35 +97,78 @@ async function resolveAssignees(
   return Array.from(resolved);
 }
 
-async function targetUserValidation(
-  raw: string,
-  ctx: ToolContext,
-): Promise<string> {
+type AssignTarget = { id: string; username: string };
+
+const CURRENT_USER = "current_user";
+
+const assignTargetKey = (raw: string) => {
   const value = raw.trim();
+  return value === CURRENT_USER ? CURRENT_USER : value.toLowerCase();
+};
 
-  if (value === "current_user") return ctx.userId;
-
-  if (!EMAIL_PATTERN.test(value)) {
-    throw new AiChatError(
-      `To assign tickets to another user, please provide their email address rather than a name or anything else. Could not recognize: "${raw}".`,
-    );
-  }
-
-  const member = await prisma.projectMember.findFirst({
-    where: {
-      projectId: ctx.projectId,
-      user: { email: { equals: value, mode: "insensitive" } },
+/**
+ * Resolves every raw assignee ("current_user" or an email) used in an
+ * assign_tickets call to a project member, in one query. Entries that can't be
+ * resolved (not an email, not in the project, view-only) don't fail the call;
+ * they're returned in `rejections` with a reason so only their tickets are
+ * skipped.
+ */
+async function resolveAssignTargets(
+  rawAssignees: string[],
+  ctx: ToolContext,
+): Promise<{
+  targets: Map<string, AssignTarget>;
+  rejections: Map<string, string>;
+}> {
+  const members = await prisma.projectMember.findMany({
+    where: { projectId: ctx.projectId },
+    select: {
+      role: true,
+      user: { select: { id: true, username: true, email: true } },
     },
-    select: { userId: true },
   });
 
-  if (!member) {
-    throw new AiChatError(
-      `"${value}" doesn't belong to this project. Please re-check the entered email.`,
-    );
+  const membersByEmail = new Map(
+    members.map((m) => [m.user.email.toLowerCase(), m]),
+  );
+  const self = members.find((m) => m.user.id === ctx.userId);
+
+  const targets = new Map<string, AssignTarget>();
+  const rejections = new Map<string, string>();
+
+  for (const raw of rawAssignees) {
+    const value = raw.trim();
+    const key = assignTargetKey(raw);
+    if (targets.has(key) || rejections.has(key)) continue;
+
+    if (key !== CURRENT_USER && !EMAIL_PATTERN.test(value)) {
+      rejections.set(
+        key,
+        `"${value}" isn't an email address. Please provide the person's email`,
+      );
+      continue;
+    }
+
+    const member = key === CURRENT_USER ? self : membersByEmail.get(key);
+
+    if (!member) {
+      rejections.set(
+        key,
+        key === CURRENT_USER
+          ? "You are not a member of this project"
+          : `"${value}" doesn't belong to this project. Please re-check the entered email`,
+      );
+    } else if (member.role === "VIEWER") {
+      rejections.set(
+        key,
+        `${member.user.username} has view-only access and can't be assigned tickets`,
+      );
+    } else {
+      targets.set(key, { id: member.user.id, username: member.user.username });
+    }
   }
 
-  return member.userId;
+  return { targets, rejections };
 }
 
 export async function executeFilterBoard(
@@ -238,44 +284,136 @@ export async function executeCreateTicket(
   };
 }
 
+type AssignmentArg = {
+  assignee: string;
+  ticketKeys?: string[];
+  date?: string;
+  dateRange?: { from: string; to: string };
+};
+
+/** What to show in the skipped list for an entry we couldn't process. */
+const describeAssignmentTickets = (assignment: AssignmentArg): string[] => {
+  if (assignment.ticketKeys?.length) return assignment.ticketKeys;
+  if (assignment.date) return [`Tickets created on ${assignment.date}`];
+  if (assignment.dateRange) {
+    return [
+      `Tickets created ${assignment.dateRange.from} to ${assignment.dateRange.to}`,
+    ];
+  }
+  return ["Unspecified tickets"];
+};
+
+/**
+ * Assigns/re-assigns tickets for one or more assignees in a single request,
+ * e.g. "assign TK-1 to a@x.com and TK-2 to b@x.com".
+ *
+ * Each assignee entry is handled independently: an entry that can't be
+ * processed (unknown email, view-only member, bad selector or date) has its
+ * tickets reported as skipped while the other entries still go through. The
+ * only whole-request failures are structural ones: no entries, too many
+ * entries, or the same ticket given to two different people.
+ */
 export async function executeAssignTickets(
-  args: {
-    assignee: string;
-    ticketKeys?: string[];
-    date?: string;
-    dateRange?: { from: string; to: string };
-  },
+  args: { assignments: AssignmentArg[] },
   ctx: ToolContext,
 ): Promise<AiAction> {
-  const targetUserId = await targetUserValidation(args.assignee, ctx);
+  const assignments = args.assignments ?? [];
 
-  const result = await assignOrReassignTickets(ctx.orgId, ctx.userId, {
-    projectId: ctx.projectId,
-    assigneeId: targetUserId,
-    ticketKeys: args.ticketKeys,
-    date: args.date,
-    dateRange: args.dateRange,
-    timeZone: ctx.timeZone,
-  });
+  if (assignments.length === 0) {
+    throw new AiChatError(
+      "Tell me which tickets to assign and to whom, e.g. \"assign TB-1 to jane@company.com\".",
+    );
+  }
 
-  const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: { id: true, username: true },
-  });
+  if (assignments.length > MAX_ASSIGNMENTS_PER_REQUEST) {
+    throw new AiChatError(
+      `I can assign to at most ${MAX_ASSIGNMENTS_PER_REQUEST} people in one request. Please split it up.`,
+    );
+  }
 
-  return {
-    type: "assign_tickets",
-    assignee: targetUser ?? { id: targetUserId, username: "this user" },
-    assigned: result.assigned.map((t) => ({
-      ticketKey: t.ticketKey,
-      title: t.title,
-    })),
-    reassigned: result.reassigned.map((t) => ({
-      ticketKey: t.ticketKey,
-      title: t.title,
-    })),
-    skipped: result.skipped,
-  };
+  const { targets, rejections } = await resolveAssignTargets(
+    assignments.map((a) => a.assignee ?? ""),
+    ctx,
+  );
+
+  const skipped: { ticketKey: string; reason: string }[] = [];
+  const runnable: { assignment: AssignmentArg; target: AssignTarget }[] = [];
+
+  for (const assignment of assignments) {
+    const key = assignTargetKey(assignment.assignee ?? "");
+    const target = targets.get(key);
+
+    let rejection = rejections.get(key);
+
+    if (!rejection) {
+      try {
+        assertValidAssignmentSelector({
+          ...assignment,
+          timeZone: ctx.timeZone,
+        });
+      } catch (error) {
+        if (!(error instanceof TicketServiceError)) throw error;
+        rejection = error.message;
+      }
+    }
+
+    if (rejection || !target) {
+      for (const ticketKey of describeAssignmentTickets(assignment)) {
+        skipped.push({
+          ticketKey,
+          reason: rejection ?? "Could not resolve the assignee",
+        });
+      }
+      continue;
+    }
+
+    runnable.push({ assignment, target });
+  }
+
+  const assigneeByTicketKey = new Map<string, string>();
+
+  for (const { assignment, target } of runnable) {
+    for (const key of assignment.ticketKeys ?? []) {
+      const normalizedKey = key.trim().toLowerCase();
+      const existingTarget = assigneeByTicketKey.get(normalizedKey);
+
+      if (existingTarget && existingTarget !== target.id) {
+        throw new AiChatError(
+          `${key.trim()} is listed for more than one person. A ticket can only be assigned to one person at a time.`,
+        );
+      }
+
+      assigneeByTicketKey.set(normalizedKey, target.id);
+    }
+  }
+
+  const results: AssignTicketsActionResult[] = [];
+
+  for (const { assignment, target } of runnable) {
+    const result = await assignOrReassignTickets(ctx.orgId, ctx.userId, {
+      projectId: ctx.projectId,
+      assigneeId: target.id,
+      ticketKeys: assignment.ticketKeys,
+      date: assignment.date,
+      dateRange: assignment.dateRange,
+      timeZone: ctx.timeZone,
+    });
+
+    results.push({
+      assignee: target,
+      assigned: result.assigned.map((t) => ({
+        ticketKey: t.ticketKey,
+        title: t.title,
+      })),
+      reassigned: result.reassigned.map((t) => ({
+        ticketKey: t.ticketKey,
+        title: t.title,
+      })),
+      skipped: result.skipped,
+    });
+  }
+
+  return { type: "assign_tickets", results, skipped };
 }
 
 export function executeOpenConfig(args: {

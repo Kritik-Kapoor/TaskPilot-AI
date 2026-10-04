@@ -28,9 +28,12 @@ export type AiAction =
     }
   | {
       type: "assign_tickets";
-      assignee: { id: string; username: string };
-      assigned: { ticketKey: string; title: string }[];
-      reassigned: { ticketKey: string; title: string }[];
+      results: {
+        assignee: { id: string; username: string };
+        assigned: { ticketKey: string; title: string }[];
+        reassigned: { ticketKey: string; title: string }[];
+        skipped: { ticketKey: string; reason: string }[];
+      }[];
       skipped: { ticketKey: string; reason: string }[];
     };
 

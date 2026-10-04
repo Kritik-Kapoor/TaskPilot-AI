@@ -1,6 +1,6 @@
 type ProjectMemberDb = Pick<
   typeof import("../config/db.js").prisma,
-  "organization" | "projectMember" | "project"
+  "organization" | "projectMember"
 >;
 
 export async function ensureOrgOwnerIsProjectAdmin(
@@ -31,31 +31,4 @@ export async function ensureOrgOwnerIsProjectAdmin(
       role: "ADMIN",
     },
   });
-}
-
-export async function ensureUserIsProjectAdminOnAllOrgProjects(
-  db: ProjectMemberDb,
-  orgId: string,
-  userId: string,
-) {
-  const projects = await db.project.findMany({
-    where: { organizationId: orgId },
-    select: { id: true },
-  });
-
-  for (const project of projects) {
-    await db.projectMember.upsert({
-      where: {
-        userId_projectId: { userId, projectId: project.id },
-      },
-      create: {
-        userId,
-        projectId: project.id,
-        role: "ADMIN",
-      },
-      update: {
-        role: "ADMIN",
-      },
-    });
-  }
 }

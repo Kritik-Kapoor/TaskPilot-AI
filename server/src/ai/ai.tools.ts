@@ -1,5 +1,8 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions.js";
 
+/** Upper bound on assignee entries per assign_tickets call. */
+export const MAX_ASSIGNMENTS_PER_REQUEST = 10;
+
 export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
@@ -118,56 +121,72 @@ export const aiTools: ChatCompletionTool[] = [
     function: {
       name: "assign_tickets",
       description:
-        "Assign or re-assign one or more tickets to a project member. " +
+        "Assign or re-assign tickets to one or more project members. " +
         "Use this for ANY request to assign, re-assign, take, or give a ticket to someone " +
         "the server determines per-ticket whether it's an assign (currently unassigned) or a " +
         "re-assign (already has an assignee) based on each ticket's current state, so never " +
         "guess which one applies yourself. " +
-        "Provide exactly ONE way to select tickets: ticketKeys, date, or dateRange.",
+        "Pass one entry in 'assignments' per person: 'Assign TK-1 to a@x.com and TK-2 to b@x.com' " +
+        "is two entries, while 'Assign TK-1 and TK-2 to a@x.com' is ONE entry with two ticketKeys. " +
+        "Each entry must use exactly ONE way to select tickets: ticketKeys, date, or dateRange.",
       parameters: {
         type: "object",
         properties: {
-          assignee: {
-            type: "string",
-            description:
-              "Who the ticket(s) should end up assigned to: 'current_user' when the user means " +
-              "themselves (assign/give me this ticket), or a project member's email address. " +
-              "Never put a bare name here. If a name is given without an email, do not call " +
-              "this tool; ask for that person's email instead.",
-          },
-          ticketKeys: {
+          assignments: {
             type: "array",
-            items: { type: "string" },
+            minItems: 1,
+            maxItems: MAX_ASSIGNMENTS_PER_REQUEST,
             description:
-              "Explicit ticket keys to assign/re-assign, e.g. ['TB-101', 'TB-102']. " +
-              "Use this when the user names specific tickets.",
-          },
-          date: {
-            type: "string",
-            description:
-              "A single date in YYYY-MM-DD format. Selects all tickets created on that date. " +
-              "Use this when the user gives one specific day.",
-          },
-          dateRange: {
-            type: "object",
-            properties: {
-              from: {
-                type: "string",
-                description: "Start date, inclusive, YYYY-MM-DD.",
+              "One entry per assignee, each with the tickets that person should end up with.",
+            items: {
+              type: "object",
+              properties: {
+                assignee: {
+                  type: "string",
+                  description:
+                    "Who the ticket(s) should end up assigned to: 'current_user' when the user means " +
+                    "themselves (assign/give me this ticket), or a project member's email address. " +
+                    "Never put a bare name here. If a name is given without an email, do not call " +
+                    "this tool; ask for that person's email instead.",
+                },
+                ticketKeys: {
+                  type: "array",
+                  items: { type: "string" },
+                  description:
+                    "Explicit ticket keys for this assignee, e.g. ['TB-101', 'TB-102']. " +
+                    "Use this when the user names specific tickets.",
+                },
+                date: {
+                  type: "string",
+                  description:
+                    "A single date in YYYY-MM-DD format. Selects all tickets created on that date. " +
+                    "Use this when the user gives one specific day.",
+                },
+                dateRange: {
+                  type: "object",
+                  properties: {
+                    from: {
+                      type: "string",
+                      description: "Start date, inclusive, YYYY-MM-DD.",
+                    },
+                    to: {
+                      type: "string",
+                      description: "End date, inclusive, YYYY-MM-DD.",
+                    },
+                  },
+                  required: ["from", "to"],
+                  additionalProperties: false,
+                  description:
+                    "A date range. Selects all tickets created within this range (inclusive). " +
+                    "Use this when the user gives a span of days worth of tickets.",
+                },
               },
-              to: {
-                type: "string",
-                description: "End date, inclusive, YYYY-MM-DD.",
-              },
+              required: ["assignee"],
+              additionalProperties: false,
             },
-            required: ["from", "to"],
-            additionalProperties: false,
-            description:
-              "A date range. Selects all tickets created within this range (inclusive). " +
-              "Use this when the user gives a span of days worth of tickets.",
           },
         },
-        required: ["assignee"],
+        required: ["assignments"],
         additionalProperties: false,
       },
     },

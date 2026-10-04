@@ -55,7 +55,7 @@ export const findConflictingProject = (
 export const findProjectInOrg = (projectId: string, orgId: string) =>
   prisma.project.findFirst({
     where: { id: projectId, organizationId: orgId },
-    select: { id: true, projectName: true, projectKey: true },
+    select: { id: true, projectName: true, projectKey: true, isDefault: true },
   });
 
 export async function createProjectWithMembership(
@@ -205,186 +205,110 @@ export const normalizeProjectMemberObject = ({
   email: user.email,
 });
 
-const projectJoinRequestSelect = {
-  id: true,
-  status: true,
-  createdAt: true,
-  user: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-    },
-  },
-} as const;
-
-const mapProjectJoinRequest = (request: {
-  id: string;
-  status: "PENDING" | "APPROVED" | "DECLINED";
-  createdAt: Date;
-  user: { id: string; username: string; email: string };
-}) => ({
-  id: request.id,
-  status: request.status,
-  requestedOn: request.createdAt.toISOString(),
-  user: request.user,
-});
-
-const assertIsProjectAdmin = async (projectId: string, userId: string) => {
-  const member = await prisma.projectMember.findUnique({
-    where: { userId_projectId: { userId, projectId } },
-    select: { role: true },
-  });
-
-  if (!member || member.role !== "ADMIN") {
-    throw new ApiError(403, "Only project admins can manage join requests");
-  }
-
-  return member;
-};
-
-export const sendProjectJoinRequest = async (
+export async function setProjectDefaultStatus(
+  orgId: string,
   userId: string,
   projectId: string,
-) => {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      id: true,
-      organizationId: true,
-      members: {
-        where: { userId },
-        select: { role: true },
-        take: 1,
-      },
-    },
-  });
+  isDefault: boolean,
+) {
+  const [project, organization] = await Promise.all([
+    findProjectInOrg(projectId, orgId),
+    prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { ownerId: true },
+    }),
+  ]);
 
   if (!project) throw new ApiError(404, "Project not found");
 
-  if (project.members.length > 0) {
-    throw new ApiError(400, "You are already a member of this project");
-  }
-
-  const userInOrg = await prisma.user.findFirst({
-    where: { id: userId, organizationId: project.organizationId },
-    select: { id: true },
-  });
-
-  if (!userInOrg)
-    throw new ApiError(403, "You are not a member of this organization");
-
-  const existing = await prisma.joinRequest.findFirst({
-    where: { userId, projectId, status: "PENDING" },
-    select: { id: true },
-  });
-
-  if (existing) {
+  if (organization?.ownerId !== userId) {
     throw new ApiError(
-      409,
-      "You already have a pending join request for this project",
+      403,
+      "Only the organization owner can change the default project",
     );
   }
 
-  await prisma.joinRequest.create({
-    data: { userId, organizationId: project.organizationId, projectId },
-  });
-};
-
-export const getIncomingProjectJoinRequests = async (
-  projectId: string,
-  userId: string,
-) => {
-  await assertIsProjectAdmin(projectId, userId);
-
-  const requests = await prisma.joinRequest.findMany({
-    where: { projectId },
-    select: projectJoinRequestSelect,
-    orderBy: { createdAt: "desc" },
-  });
-
-  return requests.map(mapProjectJoinRequest);
-};
-
-export const reviewProjectJoinRequest = async (
-  projectId: string,
-  reviewerId: string,
-  requestId: string,
-  action: "approve" | "decline",
-) => {
-  await assertIsProjectAdmin(projectId, reviewerId);
-
-  const joinRequest = await prisma.joinRequest.findFirst({
-    where: { id: requestId, projectId },
-    select: {
-      id: true,
-      status: true,
-      userId: true,
-      organizationId: true,
-      user: { select: { id: true } },
-    },
-  });
-
-  if (!joinRequest) throw new ApiError(404, "Join request not found");
-
-  if (joinRequest.status !== "PENDING") {
-    throw new ApiError(400, "This join request has already been reviewed");
+  if (project.isDefault === isDefault) {
+    return { id: project.id, isDefault };
   }
 
-  if (action === "decline") {
-    const updated = await prisma.joinRequest.update({
-      where: { id: requestId },
-      data: {
-        status: "DECLINED",
-        approvedById: reviewerId,
-        approvedOn: new Date(),
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        if (isDefault) {
+          const existingDefault = await tx.project.findFirst({
+            where: {
+              organizationId: orgId,
+              isDefault: true,
+              NOT: { id: projectId },
+            },
+            select: { projectName: true },
+          });
+
+          if (existingDefault) {
+            throw new ApiError(
+              409,
+              `"${existingDefault.projectName}" is already the default project. First set it as not default, then mark this one as default.`,
+            );
+          }
+        }
+
+        return tx.project.update({
+          where: { id: projectId },
+          data: { isDefault },
+          select: { id: true, isDefault: true },
+        });
       },
-      select: projectJoinRequestSelect,
-    });
+      { isolationLevel: "Serializable" },
+    );
+  } catch (error) {
+    if (
+      error instanceof PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      throw new ApiError(
+        409,
+        "The default project was changed by another request. Please try again.",
+      );
+    }
 
-    return mapProjectJoinRequest(updated);
+    throw error;
   }
+}
 
-  const alreadyMember = await prisma.projectMember.findUnique({
-    where: {
-      userId_projectId: { userId: joinRequest.userId, projectId },
-    },
-    select: { role: true },
+/**
+ * Adds a user who belongs to no project to their organization's default
+ * project as an ADMIN. The default project is looked up only within the org the
+ * user actually belongs to, and an existing membership is never changed, so
+ * this is safe to call repeatedly.
+ */
+export const joinDefaultProject = async (orgId: string, userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
   });
 
-  if (alreadyMember) {
-    throw new ApiError(400, "This user is already a member of the project");
+  if (!user?.organizationId || user.organizationId !== orgId) {
+    throw new ApiError(403, "You do not belong to this organization");
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.projectMember.create({
-      data: { userId: joinRequest.userId, projectId, role: "MEMBER" },
-    });
-
-    await tx.joinRequest.updateMany({
-      where: {
-        userId: joinRequest.userId,
-        projectId,
-        status: "PENDING",
-        NOT: { id: requestId },
-      },
-      data: {
-        status: "DECLINED",
-        approvedById: reviewerId,
-        approvedOn: new Date(),
-      },
-    });
-
-    return tx.joinRequest.update({
-      where: { id: requestId },
-      data: {
-        status: "APPROVED",
-        approvedById: reviewerId,
-        approvedOn: new Date(),
-      },
-      select: projectJoinRequestSelect,
-    });
+  const defaultProject = await prisma.project.findFirst({
+    where: { organizationId: orgId, isDefault: true },
+    select: { id: true },
   });
 
-  return mapProjectJoinRequest(updated);
+  if (!defaultProject) {
+    throw new ApiError(
+      404,
+      "Default project is not configured. Please contact the administrator.",
+    );
+  }
+
+  await prisma.projectMember.upsert({
+    where: { userId_projectId: { userId, projectId: defaultProject.id } },
+    create: { userId, projectId: defaultProject.id, role: "ADMIN" },
+    update: {},
+  });
+
+  return { projectId: defaultProject.id };
 };

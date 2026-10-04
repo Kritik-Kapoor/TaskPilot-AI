@@ -28,11 +28,17 @@ export type AiAction =
     }
   | {
       type: "assign_tickets";
-      assignee: { id: string; username: string };
-      assigned: { ticketKey: string; title: string }[];
-      reassigned: { ticketKey: string; title: string }[];
+      results: AssignTicketsActionResult[];
+      /** Requested tickets we couldn't act on because their assignee entry was invalid. */
       skipped: { ticketKey: string; reason: string }[];
     };
+
+export type AssignTicketsActionResult = {
+  assignee: { id: string; username: string };
+  assigned: { ticketKey: string; title: string }[];
+  reassigned: { ticketKey: string; title: string }[];
+  skipped: { ticketKey: string; reason: string }[];
+};
 
 export type AiChatResponse = {
   message: string;

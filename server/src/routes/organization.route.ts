@@ -1,110 +1,18 @@
 import { Router } from "express";
 import {
-  checkOrganizationName,
-  createOrganization,
-  deleteOrganization,
-  getIncomingJoinRequestsHandler,
-  getMyJoinRequests,
   getOrganization,
-  getOrganizationUsersHandler,
   getProjectsList,
-  joinRequest,
-  reviewJoinRequestHandler,
-  searchOrganizations,
-  transferOwnership,
   updateOrganization,
-  updateOrganizationUserHandler,
 } from "../controllers/organization.controller.js";
-import { authenticateUser } from "../middlewares/authenticateUser.middleware.js";
-import { authenticateWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { validate } from "../middlewares/validateSchema.middleware.js";
-import {
-  checkOrganizationNameQuerySchema,
-  createOrganizationSchema,
-  joinRequestIdParamsSchema,
-  organizationUserIdParamsSchema,
-  reviewJoinRequestBodySchema,
-  searchOrganizationsQuerySchema,
-  transferOwnershipParamsSchema,
-  updateOrganizationSchema,
-  updateOrganizationUserBodySchema,
-  organizationIdParamsSchema,
-} from "../schemas/organization.schema.js";
+import { updateOrganizationSchema } from "../schemas/organization.schema.js";
 
 const router = Router();
 
-router.post(
-  "/create",
-  authenticateUser,
-  validate(createOrganizationSchema),
-  createOrganization,
-);
+router.get("/", getOrganization);
 
-router.get(
-  "/search",
-  authenticateUser,
-  validate(searchOrganizationsQuerySchema, "query"),
-  searchOrganizations,
-);
+router.patch("/", validate(updateOrganizationSchema), updateOrganization);
 
-router.get(
-  "/check",
-  authenticateUser,
-  validate(checkOrganizationNameQuerySchema, "query"),
-  checkOrganizationName,
-);
-
-router.get("/join-requests", authenticateUser, getMyJoinRequests);
-
-router.get(
-  "/join-requests/incoming",
-  authenticateWorkspaceUser,
-  getIncomingJoinRequestsHandler,
-);
-
-router.patch(
-  "/join-requests/:requestId",
-  authenticateWorkspaceUser,
-  validate(joinRequestIdParamsSchema, "params"),
-  validate(reviewJoinRequestBodySchema),
-  reviewJoinRequestHandler,
-);
-
-router.post(
-  "/join-request/:orgId",
-  authenticateUser,
-  validate(organizationIdParamsSchema, "params"),
-  joinRequest,
-);
-
-router.get("/", authenticateWorkspaceUser, getOrganization);
-
-router.delete("/", authenticateWorkspaceUser, deleteOrganization);
-
-router.patch(
-  "/",
-  authenticateWorkspaceUser,
-  validate(updateOrganizationSchema),
-  updateOrganization,
-);
-
-router.post(
-  "/transfer-ownership/:newOwnerId",
-  authenticateWorkspaceUser,
-  validate(transferOwnershipParamsSchema, "params"),
-  transferOwnership,
-);
-
-router.get("/projects", authenticateWorkspaceUser, getProjectsList);
-
-router.get("/users", authenticateWorkspaceUser, getOrganizationUsersHandler);
-
-router.patch(
-  "/users/:userId",
-  authenticateWorkspaceUser,
-  validate(organizationUserIdParamsSchema, "params"),
-  validate(updateOrganizationUserBodySchema),
-  updateOrganizationUserHandler,
-);
+router.get("/projects", getProjectsList);
 
 export default router;

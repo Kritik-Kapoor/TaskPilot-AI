@@ -11,6 +11,3 @@ export const withProjectId = (path: string, projectId: string): string => {
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 };
-
-export const workspacePath = (segment: string, projectId: string): string =>
-  withProjectId(segment.startsWith("/") ? segment : `/${segment}`, projectId);

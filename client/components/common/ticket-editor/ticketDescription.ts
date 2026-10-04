@@ -61,6 +61,43 @@ export function isTicketDescriptionEmpty(
   return getTicketDescriptionTextLength(doc) === 0;
 }
 
+/**
+ * `.trim()` for a TipTap document: drops blank blocks at the start/end and
+ * trims the first/last text node. Everything in between is left untouched.
+ */
+export function trimTicketDescription(
+  doc: TicketDescriptionContent,
+): TicketDescriptionContent {
+  if (typeof doc === "string") return doc.trim() || EMPTY_TICKET_DESCRIPTION;
+
+  const isBlank = (node: JSONContent) =>
+    collectTicketDescriptionText(node).trim() === "";
+  const blocks = doc.content ?? [];
+  let start = 0;
+  let end = blocks.length;
+
+  while (start < end && isBlank(blocks[start]!)) start++;
+  while (end > start && isBlank(blocks[end - 1]!)) end--;
+
+  const kept = structuredClone(blocks.slice(start, end));
+  const first = kept[0]?.content;
+  const last = kept[kept.length - 1]?.content;
+
+  if (first?.[0]?.type === "text") first[0].text = first[0].text?.trimStart();
+  if (last?.at(-1)?.type === "text") {
+    last.at(-1)!.text = last.at(-1)!.text?.trimEnd();
+  }
+
+  // ProseMirror rejects empty text nodes, so drop any we just emptied.
+  for (const block of kept) {
+    if (block.content) {
+      block.content = block.content.filter((n) => n.type !== "text" || n.text);
+    }
+  }
+
+  return kept.length ? { ...doc, content: kept } : EMPTY_TICKET_DESCRIPTION;
+}
+
 function collectTicketDescriptionText(node: JSONContent): string {
   if (node.type === "text") {
     return node.text ?? "";
