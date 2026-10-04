@@ -9,10 +9,13 @@ import type {
 } from "./types";
 import { buildBoardFilterSearchParams } from "./lib/utils/boardTickets";
 
+export const projectBoardQueryPrefix = (projectId: string) =>
+  ["project-board", projectId] as const;
+
 export const projectBoardQueryKey = (
   projectId: string,
   filters?: BoardFilters,
-) => ["project-board", projectId, filters ?? null] as const;
+) => [...projectBoardQueryPrefix(projectId), filters ?? null] as const;
 
 export const projectColumnsQueryKey = (projectId: string) =>
   ["project-columns", projectId] as const;

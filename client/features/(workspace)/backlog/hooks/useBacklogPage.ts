@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import useCreateTicket from "../../hooks/useCreateTicket";
 import {
   getProjectColumns,
-  projectBoardQueryKey,
+  projectBoardQueryPrefix,
   projectColumnsQueryKey,
 } from "../../board/api";
 import type { Ticket } from "../../board/types";
@@ -110,7 +110,7 @@ const useBacklogPage = () => {
       queryKey: projectBacklogQueryKey(projectId),
     });
     queryClient.invalidateQueries({
-      queryKey: projectBoardQueryKey(projectId),
+      queryKey: projectBoardQueryPrefix(projectId),
     });
   }, [projectId, queryClient]);
 

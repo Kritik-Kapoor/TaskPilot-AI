@@ -23,7 +23,7 @@ import {
 import type { TicketComment, UpdateTicketPayload } from "../types";
 import {
   getProjectColumns,
-  projectBoardQueryKey,
+  projectBoardQueryPrefix,
   projectColumnsQueryKey,
 } from "../../board/api";
 import { projectBacklogQueryKey } from "../../backlog/api";
@@ -82,7 +82,8 @@ const useTicketDetails = (ticketId: string) => {
 
   const invalidateTicketLists = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: projectBoardQueryKey(projectId),
+      queryKey: projectBoardQueryPrefix(projectId),
+      refetchType: "all",
     });
     queryClient.invalidateQueries({
       queryKey: projectBacklogQueryKey(projectId),

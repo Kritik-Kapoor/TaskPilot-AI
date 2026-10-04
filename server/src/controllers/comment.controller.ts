@@ -8,11 +8,10 @@ import {
   createTicketComment,
   getTicketComments,
 } from "../services/comment.service.js";
-import { TicketServiceError } from "../services/ticket.service.js";
 import { getWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 
 const handleCommentServiceError = (error: unknown, res: Response) => {
-  if (error instanceof TicketServiceError) {
+  if (error instanceof ApiError) {
     return new ApiResponse(error.statusCode, null, error.message).send(res);
   }
 

@@ -24,12 +24,43 @@ export type AiAction =
     }
   | {
       type: "create_ticket";
-      ticket: { id: string; ticketKey: string; title: string; columnId: string };
+      ticket: {
+        id: string;
+        ticketKey: string;
+        title: string;
+        columnId: string;
+      };
     }
   | {
       type: "assign_tickets";
       results: AssignTicketsActionResult[];
-      /** Requested tickets we couldn't act on because their assignee entry was invalid. */
+      skipped: { ticketKey: string; reason: string }[];
+    }
+  | {
+      type: "create_label";
+      label: { id: string; name: string; color: string };
+      alreadyExisted: boolean;
+    }
+  | {
+      type: "apply_labels";
+      labels: { id: string; name: string; created: boolean }[];
+      labeled: { ticketKey: string; title: string }[];
+      skipped: { ticketKey: string; reason: string }[];
+    }
+  | {
+      type: "remove_labels";
+      labels: string[];
+      updated: { ticketKey: string; title: string }[];
+      skipped: { ticketKey: string; reason: string }[];
+    }
+  | {
+      type: "delete_label";
+      label: { name: string; ticketsAffected: number };
+    }
+  | {
+      type: "move_tickets";
+      columnName: string;
+      moved: { ticketKey: string; title: string }[];
       skipped: { ticketKey: string; reason: string }[];
     };
 
@@ -42,5 +73,5 @@ export type AssignTicketsActionResult = {
 
 export type AiChatResponse = {
   message: string;
-  action: AiAction | null;
+  actions: AiAction[];
 };

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import type { AiAction } from "@/features/(workspace)/ai/types";
 import ProjectSwitcher from "@/components/common/ProjectSwitcher";
 import { useProject } from "@/providers/projectProvider";
 import { useAiChat } from "@/features/(workspace)/ai/AiChatProvider";
@@ -44,6 +45,18 @@ const PROJECT_ADMIN_NAV = [
   { title: "Settings", href: "/settings", icon: Settings },
 ] as const;
 
+const isBoardNavAction = (action: AiAction) =>
+  action.type === "navigate_board" ||
+  action.type === "create_ticket" ||
+  action.type === "assign_tickets" ||
+  action.type === "apply_labels" ||
+  action.type === "remove_labels" ||
+  action.type === "move_tickets";
+
+// Consume these actions on the board page only.
+const isBoardPageConsumesAction = (action: AiAction) =>
+  action.type === "navigate_board";
+
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,6 +66,7 @@ export function AppSidebar() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configSection, setConfigSection] =
     useState<ConfigurationSection>("labels");
+  const boardNavInitiatedRef = useRef<AiAction | null>(null);
 
   const canManageLabels = projectRole !== "VIEWER";
 
@@ -62,7 +76,10 @@ export function AppSidebar() {
   );
 
   useEffect(() => {
-    if (!pendingAction) return;
+    if (!pendingAction) {
+      boardNavInitiatedRef.current = null;
+      return;
+    }
 
     if (pendingAction.type === "open_config") {
       setConfigSection(pendingAction.tab);
@@ -72,14 +89,27 @@ export function AppSidebar() {
       setConfigSection("types");
       setIsConfigOpen(true);
       consumeAction();
-    } else if (
-      pendingAction.type === "navigate_board" ||
-      pendingAction.type === "create_ticket"
-    ) {
+    } else if (pendingAction.type === "create_label") {
+      setConfigSection("labels");
+      setIsConfigOpen(true);
+      consumeAction();
+    } else if (isBoardNavAction(pendingAction)) {
       const boardPath = buildWorkspacePath("/board");
-      if (pathname !== boardPath) {
-        router.push(boardPath);
+
+      if (pathname === boardPath) {
+        if (!isBoardPageConsumesAction(pendingAction)) consumeAction();
+        return;
       }
+
+      if (boardNavInitiatedRef.current === pendingAction) {
+        if (isBoardPageConsumesAction(pendingAction)) consumeAction();
+        return;
+      }
+
+      boardNavInitiatedRef.current = pendingAction;
+      router.push(boardPath);
+
+      if (!isBoardPageConsumesAction(pendingAction)) consumeAction();
     }
   }, [pendingAction, consumeAction, pathname, router, buildWorkspacePath]);
 

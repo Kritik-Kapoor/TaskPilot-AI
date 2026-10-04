@@ -2,7 +2,7 @@ import { prisma } from "../config/db.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import type { CreateCommentInput } from "../schemas/comment.schema.js";
 import { findProjectInOrg, getProjectMembership } from "./project.service.js";
-import { TicketServiceError } from "./ticket.service.js";
+import { ApiError } from "../utils/apiResponse.js";
 
 const commentSelect = {
   id: true,
@@ -27,13 +27,13 @@ const assertTicketAccess = async (
   const project = await findProjectInOrg(projectId, orgId);
 
   if (!project) {
-    throw new TicketServiceError(404, "Project not found");
+    throw new ApiError(404, "Project not found");
   }
 
   const membership = await getProjectMembership(userId, projectId);
 
   if (!membership) {
-    throw new TicketServiceError(403, "You are not a member of this project");
+    throw new ApiError(403, "You are not a member of this project");
   }
 
   const ticket = await prisma.ticket.findFirst({
@@ -47,7 +47,7 @@ const assertTicketAccess = async (
   });
 
   if (!ticket || ticket.project.organizationId !== orgId) {
-    throw new TicketServiceError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found");
   }
 
   return membership;
@@ -83,7 +83,7 @@ export const createTicketComment = async (
   );
 
   if (membership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "You do not have permission to comment on tickets in this project",
     );

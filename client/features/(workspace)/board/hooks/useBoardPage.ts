@@ -17,6 +17,7 @@ import useCreateTicket from "../../hooks/useCreateTicket";
 import {
   getProjectBoard,
   projectBoardQueryKey,
+  projectBoardQueryPrefix,
   repositionTicket,
 } from "../api";
 import {
@@ -145,7 +146,6 @@ const useBoardPage = () => {
 
   const projectId = activeProject?.id ?? "";
   const boardQueryKey = projectBoardQueryKey(projectId, apiFilters);
-  const boardQueryPrefix = ["project-board", projectId] as const;
 
   const {
     data: boardData,
@@ -197,7 +197,9 @@ const useBoardPage = () => {
       }),
 
     onMutate: (vars) => {
-      queryClient.cancelQueries({ queryKey: boardQueryPrefix });
+      queryClient.cancelQueries({
+        queryKey: projectBoardQueryPrefix(projectId),
+      });
 
       const snapshot =
         queryClient.getQueryData<ProjectBoardResponse>(boardQueryKey);
@@ -222,7 +224,9 @@ const useBoardPage = () => {
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: boardQueryPrefix });
+      queryClient.invalidateQueries({
+        queryKey: projectBoardQueryPrefix(projectId),
+      });
     },
   });
 
@@ -243,14 +247,18 @@ const useBoardPage = () => {
   } = useCreateTicket({
     columnId: defaultColumnId,
     onCreated: (ticket) => {
-      queryClient.cancelQueries({ queryKey: boardQueryPrefix });
+      queryClient.cancelQueries({
+        queryKey: projectBoardQueryPrefix(projectId),
+      });
       queryClient.setQueryData<ProjectBoardResponse>(
         boardQueryKey,
         (old) => old && optimisticCreate(old, ticket, ticket.columnId),
       );
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: boardQueryPrefix });
+      queryClient.invalidateQueries({
+        queryKey: projectBoardQueryPrefix(projectId),
+      });
     },
   });
 

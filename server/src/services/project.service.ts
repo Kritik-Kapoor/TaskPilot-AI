@@ -276,12 +276,6 @@ export async function setProjectDefaultStatus(
   }
 }
 
-/**
- * Adds a user who belongs to no project to their organization's default
- * project as an ADMIN. The default project is looked up only within the org the
- * user actually belongs to, and an existing membership is never changed, so
- * this is safe to call repeatedly.
- */
 export const joinDefaultProject = async (orgId: string, userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -311,4 +305,104 @@ export const joinDefaultProject = async (orgId: string, userId: string) => {
   });
 
   return { projectId: defaultProject.id };
+};
+
+const DEFAULT_LABEL_COLOR = "#6366f1";
+
+export const createOrGetProjectLabel = async (
+  orgId: string,
+  userId: string,
+  projectId: string,
+  input: { name: string; color?: string },
+) => {
+  const project = await findProjectInOrg(projectId, orgId);
+
+  if (!project) throw new ApiError(404, "Project not found");
+
+  const membership = await getProjectMembership(userId, projectId);
+
+  if (!membership) {
+    throw new ApiError(403, "You are not a member of this project");
+  }
+
+  if (membership.role === "VIEWER") {
+    throw new ApiError(
+      403,
+      "You do not have permission to create labels in this project",
+    );
+  }
+
+  const name = input.name.trim().toLowerCase();
+
+  if (name.length < 2) {
+    throw new ApiError(400, "Label name must be at least 2 characters long");
+  }
+
+  const existing = await prisma.label.findFirst({
+    where: { projectId, name },
+    select: { id: true, name: true, color: true },
+  });
+
+  if (existing) return { ...existing, alreadyExisted: true };
+
+  const created = await prisma.label.create({
+    data: {
+      projectId,
+      name,
+      color: input.color?.trim() || DEFAULT_LABEL_COLOR,
+    },
+    select: { id: true, name: true, color: true },
+  });
+
+  return { ...created, alreadyExisted: false };
+};
+
+export const deleteProjectLabelByName = async (
+  orgId: string,
+  userId: string,
+  projectId: string,
+  rawName: string,
+) => {
+  const project = await findProjectInOrg(projectId, orgId);
+
+  if (!project) throw new ApiError(404, "Project not found");
+
+  const membership = await getProjectMembership(userId, projectId);
+
+  if (!membership) {
+    throw new ApiError(403, "You are not a member of this project");
+  }
+
+  if (membership.role === "VIEWER") {
+    throw new ApiError(
+      403,
+      "You do not have permission to delete labels in this project",
+    );
+  }
+
+  const name = rawName.trim().toLowerCase();
+
+  if (name.length < 2) {
+    throw new ApiError(400, `Label "${name}" doesn't exist in this project`);
+  }
+
+  const label = await prisma.label.findFirst({
+    where: { projectId, name },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { tickets: true } },
+    },
+  });
+
+  if (!label) {
+    throw new ApiError(404, `Label "${name}" doesn't exist in this project`);
+  }
+
+  await prisma.label.delete({ where: { id: label.id } });
+
+  return {
+    name: label.name,
+    ticketsAffected: label._count.tickets,
+  };
 };

@@ -53,25 +53,51 @@ export function AiChatProvider({
       try {
         const data = await sendAiChat(text.trim(), projectId);
 
+        const actions = data.actions ?? [];
+
         const assistantMsg: AiMessage = {
           id: uid(),
           role: "assistant",
           content: data.message,
-          action: data.action,
+          actions,
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
 
-        if (data.action) {
-          if (data.action.type === "create_issue_type") {
+        if (actions.length > 0) {
+          const types = new Set(actions.map((action) => action.type));
+
+          if (types.has("create_issue_type")) {
             queryClient.invalidateQueries({ queryKey: ["ticket-types"] });
-          } else if (
-            data.action.type === "create_ticket" ||
-            data.action.type === "assign_tickets"
+          }
+          if (
+            types.has("create_ticket") ||
+            types.has("assign_tickets") ||
+            types.has("apply_labels") ||
+            types.has("remove_labels") ||
+            types.has("move_tickets")
           ) {
             queryClient.invalidateQueries({ queryKey: ["project-board"] });
           }
-          setPendingAction(data.action);
+          if (
+            types.has("create_label") ||
+            types.has("apply_labels") ||
+            types.has("remove_labels") ||
+            types.has("delete_label")
+          ) {
+            queryClient.invalidateQueries({ queryKey: ["project-labels"] });
+          }
+
+          const uiAction =
+            actions.find((action) => action.type === "navigate_board") ??
+            actions.find((action) => action.type === "open_config") ??
+            actions.find((action) => action.type === "create_issue_type") ??
+            actions.find((action) => action.type === "create_ticket") ??
+            actions.find((action) => action.type === "create_label") ??
+            actions.find((action) => action.type === "move_tickets") ??
+            actions[0];
+
+          setPendingAction(uiAction);
         }
       } catch (error) {
         const errorMsg: AiMessage = {

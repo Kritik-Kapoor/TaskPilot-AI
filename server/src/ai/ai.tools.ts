@@ -1,7 +1,50 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions.js";
 
-/** Upper bound on assignee entries per assign_tickets call. */
 export const MAX_ASSIGNMENTS_PER_REQUEST = 10;
+
+const ticketSelectorProperties = {
+  ticketKeys: {
+    type: "array",
+    items: { type: "string" },
+    description:
+      "Explicit ticket keys, e.g. ['TB-104']. Use when the user names specific tickets.",
+  },
+  allTickets: {
+    type: "boolean",
+    description:
+      "Set true to select every ticket in the project. Combine with withLabels or onlyUnassigned " +
+      "when the user says 'all tickets', 'every ticket', or 'apply to all'.",
+  },
+  date: {
+    type: "string",
+    description:
+      "YYYY-MM-DD. Selects tickets created on that day (user timezone).",
+  },
+  dateRange: {
+    type: "object",
+    properties: {
+      from: {
+        type: "string",
+        description: "Start date, inclusive, YYYY-MM-DD.",
+      },
+      to: { type: "string", description: "End date, inclusive, YYYY-MM-DD." },
+    },
+    required: ["from", "to"],
+    additionalProperties: false,
+    description: "Selects tickets created in this date range (inclusive).",
+  },
+  withLabels: {
+    type: "array",
+    items: { type: "string" },
+    description:
+      "Only tickets that have ALL of these labels. Use for 'tickets with the frontend label'.",
+  },
+  onlyUnassigned: {
+    type: "boolean",
+    description:
+      "Only tickets with no assignee. Use for 'all unassigned' or 'remaining unassigned tickets'.",
+  },
+} as const;
 
 export const aiTools: ChatCompletionTool[] = [
   {
@@ -94,6 +137,13 @@ export const aiTools: ChatCompletionTool[] = [
             type: "string",
             description: "Ticket title.",
           },
+          assignee: {
+            type: "string",
+            description:
+              "Optional. Who the new ticket should be assigned to: 'current_user' or a project member's email. " +
+              "Use this when the user creates a ticket and immediately assigns it, e.g. " +
+              "'create a website bug ticket and assign it to jane@company.com'.",
+          },
           priority: {
             type: "string",
             enum: ["LOW", "MEDIUM", "HIGH", "URGENT"],
@@ -106,9 +156,9 @@ export const aiTools: ChatCompletionTool[] = [
           },
           columnName: {
             type: "string",
-            enum: ["backlog", "todo", "in_progress", "in_review", "done"],
             description:
-              "Which column to place the ticket in. Defaults to 'todo'.",
+              "Board column name for this project (e.g. 'Todo', 'In Progress'). " +
+              "Must match an existing column on the board. Defaults to 'Todo'.",
           },
         },
         required: ["title"],
@@ -119,16 +169,128 @@ export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "create_label",
+      description:
+        "Create a new label in the current project. " +
+        "Use when the user asks to add or create a label. If they also want it on specific tickets, " +
+        "call this first and then call apply_labels.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Label name (e.g. 'frontend'). Stored lowercase.",
+          },
+          color: {
+            type: "string",
+            description:
+              "Hex color for the label (e.g. '#6366f1'). Pick one if the user doesn't specify.",
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "apply_labels",
+      description:
+        "Add one or more labels to tickets. Creates a label if it does not already exist. " +
+        "Use when the user asks to add, attach, or tag tickets with labels (including 'apply X to all tickets'). " +
+        "Existing labels on those tickets are kept.",
+      parameters: {
+        type: "object",
+        properties: {
+          labels: {
+            type: "array",
+            items: { type: "string" },
+            description: "Label names to add, e.g. ['frontend'].",
+          },
+          ...ticketSelectorProperties,
+        },
+        required: ["labels"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "remove_labels",
+      description:
+        "Remove one or more labels from tickets without deleting the label from the project. " +
+        "Use when the user asks to remove, untag, or strip labels from tickets (including from all tickets).",
+      parameters: {
+        type: "object",
+        properties: {
+          labels: {
+            type: "array",
+            items: { type: "string" },
+            description: "Label names to remove from the selected tickets.",
+          },
+          ...ticketSelectorProperties,
+        },
+        required: ["labels"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_label",
+      description:
+        "Delete a label from the project entirely. It is removed from every ticket that had it. " +
+        "Use when the user asks to delete or remove a label definition (not just from one ticket).",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Label name to delete, e.g. 'frontend'.",
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "move_tickets",
+      description:
+        "Move tickets to a board column. The column must already exist on this project's board. " +
+        "Tickets are placed at the bottom of the target column. " +
+        "Use when the user asks to move tickets to In Progress, Done, or any other column.",
+      parameters: {
+        type: "object",
+        properties: {
+          columnName: {
+            type: "string",
+            description:
+              "Target column name as shown on the board (e.g. 'In Progress', 'Done').",
+          },
+          ...ticketSelectorProperties,
+        },
+        required: ["columnName"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "assign_tickets",
       description:
         "Assign or re-assign tickets to one or more project members. " +
-        "Use this for ANY request to assign, re-assign, take, or give a ticket to someone " +
-        "the server determines per-ticket whether it's an assign (currently unassigned) or a " +
-        "re-assign (already has an assignee) based on each ticket's current state, so never " +
-        "guess which one applies yourself. " +
-        "Pass one entry in 'assignments' per person: 'Assign TK-1 to a@x.com and TK-2 to b@x.com' " +
-        "is two entries, while 'Assign TK-1 and TK-2 to a@x.com' is ONE entry with two ticketKeys. " +
-        "Each entry must use exactly ONE way to select tickets: ticketKeys, date, or dateRange.",
+        "Use this for ANY request to assign, re-assign, take, or give tickets to someone. " +
+        "The server determines per-ticket whether it's an assign or re-assign. " +
+        "Pass one entry in 'assignments' per person. " +
+        "Each entry needs a ticket scope (ticketKeys, allTickets, date, or dateRange) and may combine " +
+        "withLabels or onlyUnassigned — e.g. all unassigned tickets to me, or all tickets with label frontend to a@x.com.",
       parameters: {
         type: "object",
         properties: {
@@ -149,37 +311,7 @@ export const aiTools: ChatCompletionTool[] = [
                     "Never put a bare name here. If a name is given without an email, do not call " +
                     "this tool; ask for that person's email instead.",
                 },
-                ticketKeys: {
-                  type: "array",
-                  items: { type: "string" },
-                  description:
-                    "Explicit ticket keys for this assignee, e.g. ['TB-101', 'TB-102']. " +
-                    "Use this when the user names specific tickets.",
-                },
-                date: {
-                  type: "string",
-                  description:
-                    "A single date in YYYY-MM-DD format. Selects all tickets created on that date. " +
-                    "Use this when the user gives one specific day.",
-                },
-                dateRange: {
-                  type: "object",
-                  properties: {
-                    from: {
-                      type: "string",
-                      description: "Start date, inclusive, YYYY-MM-DD.",
-                    },
-                    to: {
-                      type: "string",
-                      description: "End date, inclusive, YYYY-MM-DD.",
-                    },
-                  },
-                  required: ["from", "to"],
-                  additionalProperties: false,
-                  description:
-                    "A date range. Selects all tickets created within this range (inclusive). " +
-                    "Use this when the user gives a span of days worth of tickets.",
-                },
+                ...ticketSelectorProperties,
               },
               required: ["assignee"],
               additionalProperties: false,

@@ -16,17 +16,12 @@ const BoardPage = () => {
   const appliedRef = useRef(false);
 
   useEffect(() => {
-    if (
-      !pendingAction ||
-      appliedRef.current ||
-      (pendingAction.type !== "navigate_board" && pendingAction.type !== "create_ticket")
-    ) {
+    if (!pendingAction || appliedRef.current) {
       return;
     }
 
-    appliedRef.current = true;
-
     if (pendingAction.type === "navigate_board") {
+      appliedRef.current = true;
       actions.applyFilters({
         query: pendingAction.filters.query ?? "",
         assignee: pendingAction.filters.assignee ?? [],
@@ -34,13 +29,20 @@ const BoardPage = () => {
         type: pendingAction.filters.type ?? "all",
         labels: pendingAction.filters.labels ?? [],
       });
+      consumeAction();
+      return () => {
+        appliedRef.current = false;
+      };
     }
 
-    consumeAction();
+    const boardRefreshOnly =
+      pendingAction.type === "create_ticket" ||
+      pendingAction.type === "assign_tickets" ||
+      pendingAction.type === "apply_labels" ||
+      pendingAction.type === "remove_labels" ||
+      pendingAction.type === "move_tickets";
 
-    return () => {
-      appliedRef.current = false;
-    };
+    if (boardRefreshOnly) consumeAction();
   }, [pendingAction, consumeAction, actions]);
 
   const projectName = state.activeProject

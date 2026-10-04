@@ -3,11 +3,22 @@ import { AiChatError } from "./ai.errors.js";
 import type { AiAction, AssignTicketsActionResult } from "./ai.types.js";
 import { MAX_ASSIGNMENTS_PER_REQUEST } from "./ai.tools.js";
 import {
-  TicketServiceError,
-  assertValidAssignmentSelector,
+  addLabelsToTickets,
   assignOrReassignTickets,
   createTicket as createTicketService,
+  moveTicketsToColumn,
+  removeLabelsFromTickets,
 } from "../services/ticket.service.js";
+import { assertValidTicketBulkSelector } from "../utils/ticketBulkSelector.utils.js";
+import { ApiError } from "../utils/apiResponse.js";
+import {
+  createOrGetProjectLabel,
+  deleteProjectLabelByName,
+} from "../services/project.service.js";
+import {
+  describeTicketBulkSelector,
+  resolveTicketsForBulkSelector,
+} from "../utils/ticketBulkSelector.utils.js";
 import { createIssueType as createIssueTypeService } from "../services/ticketType.service.js";
 
 type ToolContext = {
@@ -106,13 +117,6 @@ const assignTargetKey = (raw: string) => {
   return value === CURRENT_USER ? CURRENT_USER : value.toLowerCase();
 };
 
-/**
- * Resolves every raw assignee ("current_user" or an email) used in an
- * assign_tickets call to a project member, in one query. Entries that can't be
- * resolved (not an email, not in the project, view-only) don't fail the call;
- * they're returned in `rejections` with a reason so only their tickets are
- * skipped.
- */
 async function resolveAssignTargets(
   rawAssignees: string[],
   ctx: ToolContext,
@@ -245,9 +249,13 @@ export async function executeCreateTicket(
     priority?: string;
     type?: string;
     columnName?: string;
+    assignee?: string;
   },
   ctx: ToolContext,
-): Promise<AiAction> {
+): Promise<{
+  action: Extract<AiAction, { type: "create_ticket" }>;
+  assignment?: Extract<AiAction, { type: "assign_tickets" }>;
+}> {
   let typeId: string | undefined;
 
   if (args.type) {
@@ -273,8 +281,8 @@ export async function executeCreateTicket(
     typeId,
   });
 
-  return {
-    type: "create_ticket",
+  const action = {
+    type: "create_ticket" as const,
     ticket: {
       id: ticket.id,
       ticketKey: ticket.ticketKey,
@@ -282,37 +290,137 @@ export async function executeCreateTicket(
       columnId: ticket.columnId,
     },
   };
+
+  if (!args.assignee?.trim()) return { action };
+
+  const assignment = (await executeAssignTickets(
+    {
+      assignments: [
+        { assignee: args.assignee, ticketKeys: [ticket.ticketKey] },
+      ],
+    },
+    ctx,
+  )) as Extract<AiAction, { type: "assign_tickets" }>;
+
+  return { action, assignment };
 }
 
-type AssignmentArg = {
-  assignee: string;
+export async function executeCreateLabel(
+  args: { name: string; color?: string },
+  ctx: ToolContext,
+): Promise<AiAction> {
+  const label = await createOrGetProjectLabel(
+    ctx.orgId,
+    ctx.userId,
+    ctx.projectId,
+    args,
+  );
+
+  return {
+    type: "create_label",
+    label: { id: label.id, name: label.name, color: label.color },
+    alreadyExisted: label.alreadyExisted,
+  };
+}
+
+type TicketSelectorArg = {
   ticketKeys?: string[];
+  allTickets?: boolean;
   date?: string;
   dateRange?: { from: string; to: string };
+  withLabels?: string[];
+  onlyUnassigned?: boolean;
 };
 
-/** What to show in the skipped list for an entry we couldn't process. */
-const describeAssignmentTickets = (assignment: AssignmentArg): string[] => {
-  if (assignment.ticketKeys?.length) return assignment.ticketKeys;
-  if (assignment.date) return [`Tickets created on ${assignment.date}`];
-  if (assignment.dateRange) {
-    return [
-      `Tickets created ${assignment.dateRange.from} to ${assignment.dateRange.to}`,
-    ];
-  }
-  return ["Unspecified tickets"];
+const withSelectorContext = (
+  selector: TicketSelectorArg,
+  ctx: ToolContext,
+) => ({
+  ...selector,
+  timeZone: ctx.timeZone,
+});
+
+export async function executeApplyLabels(
+  args: TicketSelectorArg & { labels: string[] },
+  ctx: ToolContext,
+): Promise<AiAction> {
+  const result = await addLabelsToTickets(ctx.orgId, ctx.userId, {
+    projectId: ctx.projectId,
+    labelNames: args.labels ?? [],
+    ...withSelectorContext(args, ctx),
+  });
+
+  return {
+    type: "apply_labels",
+    labels: result.labels,
+    labeled: result.labeled,
+    skipped: result.skipped,
+  };
+}
+
+export async function executeRemoveLabels(
+  args: TicketSelectorArg & { labels: string[] },
+  ctx: ToolContext,
+): Promise<AiAction> {
+  const result = await removeLabelsFromTickets(ctx.orgId, ctx.userId, {
+    projectId: ctx.projectId,
+    labelNames: args.labels ?? [],
+    ...withSelectorContext(args, ctx),
+  });
+
+  return {
+    type: "remove_labels",
+    labels: result.labels,
+    updated: result.updated,
+    skipped: result.skipped,
+  };
+}
+
+export async function executeDeleteLabel(
+  args: { name: string },
+  ctx: ToolContext,
+): Promise<AiAction> {
+  const result = await deleteProjectLabelByName(
+    ctx.orgId,
+    ctx.userId,
+    ctx.projectId,
+    args.name,
+  );
+
+  return {
+    type: "delete_label",
+    label: {
+      name: result.name,
+      ticketsAffected: result.ticketsAffected,
+    },
+  };
+}
+
+export async function executeMoveTickets(
+  args: TicketSelectorArg & { columnName: string },
+  ctx: ToolContext,
+): Promise<AiAction> {
+  const result = await moveTicketsToColumn(ctx.orgId, ctx.userId, {
+    projectId: ctx.projectId,
+    columnName: args.columnName,
+    ...withSelectorContext(args, ctx),
+  });
+
+  return {
+    type: "move_tickets",
+    columnName: result.columnName,
+    moved: result.moved,
+    skipped: result.skipped,
+  };
+}
+
+type AssignmentArg = TicketSelectorArg & {
+  assignee: string;
 };
 
-/**
- * Assigns/re-assigns tickets for one or more assignees in a single request,
- * e.g. "assign TK-1 to a@x.com and TK-2 to b@x.com".
- *
- * Each assignee entry is handled independently: an entry that can't be
- * processed (unknown email, view-only member, bad selector or date) has its
- * tickets reported as skipped while the other entries still go through. The
- * only whole-request failures are structural ones: no entries, too many
- * entries, or the same ticket given to two different people.
- */
+const describeAssignmentTickets = (assignment: AssignmentArg): string[] =>
+  describeTicketBulkSelector(assignment);
+
 export async function executeAssignTickets(
   args: { assignments: AssignmentArg[] },
   ctx: ToolContext,
@@ -321,7 +429,7 @@ export async function executeAssignTickets(
 
   if (assignments.length === 0) {
     throw new AiChatError(
-      "Tell me which tickets to assign and to whom, e.g. \"assign TB-1 to jane@company.com\".",
+      'Tell me which tickets to assign and to whom, e.g. "assign TB-1 to jane@company.com".',
     );
   }
 
@@ -347,12 +455,12 @@ export async function executeAssignTickets(
 
     if (!rejection) {
       try {
-        assertValidAssignmentSelector({
+        assertValidTicketBulkSelector({
           ...assignment,
           timeZone: ctx.timeZone,
         });
       } catch (error) {
-        if (!(error instanceof TicketServiceError)) throw error;
+        if (!(error instanceof ApiError)) throw error;
         rejection = error.message;
       }
     }
@@ -370,20 +478,24 @@ export async function executeAssignTickets(
     runnable.push({ assignment, target });
   }
 
-  const assigneeByTicketKey = new Map<string, string>();
+  const assigneeByTicketId = new Map<string, string>();
 
   for (const { assignment, target } of runnable) {
-    for (const key of assignment.ticketKeys ?? []) {
-      const normalizedKey = key.trim().toLowerCase();
-      const existingTarget = assigneeByTicketKey.get(normalizedKey);
+    const { tickets } = await resolveTicketsForBulkSelector(
+      ctx.projectId,
+      withSelectorContext(assignment, ctx),
+    );
+
+    for (const ticket of tickets) {
+      const existingTarget = assigneeByTicketId.get(ticket.id);
 
       if (existingTarget && existingTarget !== target.id) {
         throw new AiChatError(
-          `${key.trim()} is listed for more than one person. A ticket can only be assigned to one person at a time.`,
+          `${ticket.ticketKey} is listed for more than one person. A ticket can only be assigned to one person at a time.`,
         );
       }
 
-      assigneeByTicketKey.set(normalizedKey, target.id);
+      assigneeByTicketId.set(ticket.id, target.id);
     }
   }
 
@@ -393,10 +505,7 @@ export async function executeAssignTickets(
     const result = await assignOrReassignTickets(ctx.orgId, ctx.userId, {
       projectId: ctx.projectId,
       assigneeId: target.id,
-      ticketKeys: assignment.ticketKeys,
-      date: assignment.date,
-      dateRange: assignment.dateRange,
-      timeZone: ctx.timeZone,
+      ...withSelectorContext(assignment, ctx),
     });
 
     results.push({

@@ -4,7 +4,11 @@ import type {
   CreateTicketInput,
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
-import { findProjectInOrg, getProjectMembership } from "./project.service.js";
+import {
+  createOrGetProjectLabel,
+  findProjectInOrg,
+  getProjectMembership,
+} from "./project.service.js";
 import { normalizeStoredTicketDescription } from "../utils/ticketDescription.utils.js";
 import {
   getAppendPosition,
@@ -14,20 +18,11 @@ import {
 import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
 import { Prisma } from "../generated/prisma/client.js";
 import {
-  AssignmentDateParseError,
-  AssignmentTimeZoneError,
-  buildAssignmentCreatedAtFilter,
-  DEFAULT_ASSIGNMENT_TIME_ZONE,
-} from "../utils/assignmentDate.utils.js";
+  resolveTicketsForBulkSelector,
+  type TicketBulkSelector,
+} from "../utils/ticketBulkSelector.utils.js";
 
-export class TicketServiceError extends Error {
-  statusCode: number;
-
-  constructor(statusCode: number, message: string) {
-    super(message);
-    this.statusCode = statusCode;
-  }
-}
+import { ApiError } from "../utils/apiResponse.js";
 
 const ticketBaseSelect = {
   id: true,
@@ -72,8 +67,6 @@ const ticketBaseSelect = {
   },
 } satisfies Prisma.TicketSelect;
 
-// Full select includes the column relation — used for single-ticket responses
-// where the caller doesn't have column context from a parent query.
 const ticketSelect = {
   ...ticketBaseSelect,
   column: {
@@ -95,12 +88,12 @@ const assertProjectAccess = async (
 ) => {
   const project = await findProjectInOrg(projectId, orgId);
 
-  if (!project) throw new TicketServiceError(404, "Project not found");
+  if (!project) throw new ApiError(404, "Project not found");
 
   const membership = await getProjectMembership(userId, projectId);
 
   if (!membership) {
-    throw new TicketServiceError(403, "You are not a member of this project");
+    throw new ApiError(403, "You are not a member of this project");
   }
 
   return { project, membership };
@@ -117,19 +110,38 @@ const resolveColumn = async (
     });
 
     if (!column) {
-      throw new TicketServiceError(404, "Column not found in this project");
+      throw new ApiError(404, "Column not found in this project");
     }
 
     return column;
   }
 
+  return resolveProjectColumnByName(projectId, input.columnName!);
+};
+
+export const resolveProjectColumnByName = async (
+  projectId: string,
+  columnName: string,
+) => {
+  const trimmed = columnName.trim();
+
+  if (!trimmed) {
+    throw new ApiError(400, "Column name is required");
+  }
+
   const column = await prisma.boardColumn.findFirst({
-    where: { projectId, name: input.columnName! },
-    select: { id: true },
+    where: {
+      projectId,
+      name: { equals: trimmed, mode: "insensitive" },
+    },
+    select: { id: true, name: true },
   });
 
   if (!column) {
-    throw new TicketServiceError(404, "Column not found in this project");
+    throw new ApiError(
+      404,
+      `Column "${trimmed}" doesn't exist in this project. Check the board column names and try again.`,
+    );
   }
 
   return column;
@@ -144,10 +156,7 @@ const assertAssigneeInProject = async (
   const assigneeMembership = await getProjectMembership(assigneeId, projectId);
 
   if (!assigneeMembership) {
-    throw new TicketServiceError(
-      400,
-      "Assignee must be a member of this project",
-    );
+    throw new ApiError(400, "Assignee must be a member of this project");
   }
 };
 
@@ -258,7 +267,7 @@ export const createTicket = async (
   );
 
   if (membership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "You do not have permission to create tickets in this project",
     );
@@ -490,7 +499,7 @@ export const getTicketById = async (
   });
 
   if (!ticket || ticket.project.organizationId !== orgId) {
-    throw new TicketServiceError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found");
   }
 
   const { project: _project, ...ticketData } = ticket;
@@ -507,7 +516,7 @@ export const updateTicket = async (
   const { membership } = await assertProjectAccess(userId, orgId, projectId);
 
   if (membership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "You do not have permission to update tickets in this project",
     );
@@ -526,7 +535,7 @@ export const updateTicket = async (
   });
 
   if (!existing || existing.project.organizationId !== orgId) {
-    throw new TicketServiceError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found");
   }
 
   if (input.assigneeId) {
@@ -542,7 +551,7 @@ export const updateTicket = async (
     });
 
     if (!column) {
-      throw new TicketServiceError(404, "Column not found in this project");
+      throw new ApiError(404, "Column not found in this project");
     }
   }
 
@@ -602,116 +611,6 @@ export const updateTicket = async (
   });
 };
 
-const parseAssignmentDateFilter = (
-  timeZone: string,
-  date?: string,
-  dateRange?: { from: string; to: string },
-): Prisma.TicketWhereInput | null => {
-  try {
-    return buildAssignmentCreatedAtFilter(timeZone, date, dateRange);
-  } catch (error) {
-    if (
-      error instanceof AssignmentDateParseError ||
-      error instanceof AssignmentTimeZoneError ||
-      error instanceof Error
-    ) {
-      throw new TicketServiceError(400, error.message);
-    }
-    throw error;
-  }
-};
-
-const assignmentTicketSelect = {
-  id: true,
-  ticketKey: true,
-  title: true,
-  assigneeId: true,
-} satisfies Prisma.TicketSelect;
-
-type AssignmentSelector = {
-  ticketKeys?: string[];
-  date?: string;
-  dateRange?: { from: string; to: string };
-  timeZone?: string;
-};
-
-/**
- * Throws a TicketServiceError unless exactly one selector (ticket keys, a date
- * or a date range) is provided and any date is valid. Exported so callers that
- * run several assignments can validate all of them before applying any.
- */
-export const assertValidAssignmentSelector = (selector: AssignmentSelector) => {
-  const selectorsProvided = [
-    (selector.ticketKeys?.length ?? 0) > 0,
-    Boolean(selector.date),
-    Boolean(selector.dateRange),
-  ].filter(Boolean).length;
-
-  if (selectorsProvided === 0) {
-    throw new TicketServiceError(
-      400,
-      "Please specify which tickets to assign. Provide ticket keys, a date, or a date range.",
-    );
-  }
-
-  if (selectorsProvided > 1) {
-    throw new TicketServiceError(
-      400,
-      "Please specify only one of: ticket keys, a date, or a date range. Don't provide multiple selectors.",
-    );
-  }
-
-  if (selector.date || selector.dateRange) {
-    parseAssignmentDateFilter(
-      selector.timeZone ?? DEFAULT_ASSIGNMENT_TIME_ZONE,
-      selector.date,
-      selector.dateRange,
-    );
-  }
-};
-
-const resolveTicketsForAssignment = async (
-  projectId: string,
-  selector: AssignmentSelector,
-) => {
-  assertValidAssignmentSelector(selector);
-
-  if (selector.ticketKeys?.length) {
-    const requestedKeys = selector.ticketKeys.map((key) => key.trim());
-
-    const tickets = await prisma.ticket.findMany({
-      where: {
-        projectId,
-        ticketKey: { in: requestedKeys, mode: "insensitive" },
-      },
-      select: assignmentTicketSelect,
-    });
-
-    const foundKeys = new Set(
-      tickets.map((ticket) => ticket.ticketKey.toLowerCase()),
-    );
-
-    const notFoundKeys = requestedKeys.filter(
-      (key) => !foundKeys.has(key.toLowerCase()),
-    );
-
-    return { tickets, notFoundKeys };
-  }
-
-  const dateFilter = parseAssignmentDateFilter(
-    selector.timeZone ?? DEFAULT_ASSIGNMENT_TIME_ZONE,
-    selector.date,
-    selector.dateRange,
-  );
-
-  const tickets = await prisma.ticket.findMany({
-    where: { projectId, ...dateFilter },
-    select: assignmentTicketSelect,
-  });
-
-  return { tickets, notFoundKeys: [] as string[] };
-};
-
 const buildReassignmentComment = (
   actorName: string,
   targetName: string,
@@ -730,14 +629,9 @@ const buildReassignmentComment = (
   ],
 });
 
-export type AssignTicketsInput = {
+export type AssignTicketsInput = TicketBulkSelector & {
   projectId: string;
   assigneeId: string;
-  ticketKeys?: string[];
-  date?: string;
-  dateRange?: { from: string; to: string };
-  /** IANA timezone from the client (e.g. Asia/Kolkata). Defaults to UTC. */
-  timeZone?: string;
 };
 
 export type AssignTicketsResult = {
@@ -766,7 +660,7 @@ export const assignOrReassignTickets = async (
   );
 
   if (membership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "You do not have permission to assign tickets in this project",
     );
@@ -780,20 +674,17 @@ export const assignOrReassignTickets = async (
   );
 
   if (!targetMembership) {
-    throw new TicketServiceError(
-      400,
-      "Assignee must be a member of this project",
-    );
+    throw new ApiError(400, "Assignee must be a member of this project");
   }
 
   if (targetMembership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       400,
       "Tickets cannot be assigned to a project member with view only access",
     );
   }
 
-  const { tickets, notFoundKeys } = await resolveTicketsForAssignment(
+  const { tickets, notFoundKeys } = await resolveTicketsForBulkSelector(
     input.projectId,
     input,
   );
@@ -891,6 +782,333 @@ export const assignOrReassignTickets = async (
   return result;
 };
 
+export type AddLabelsToTicketsResult = {
+  labels: { id: string; name: string; created: boolean }[];
+  labeled: { ticketKey: string; title: string }[];
+  skipped: { ticketKey: string; reason: string }[];
+};
+
+export const addLabelsToTickets = async (
+  orgId: string,
+  userId: string,
+  input: {
+    projectId: string;
+    labelNames: string[];
+    labelColor?: string;
+  } & TicketBulkSelector,
+): Promise<AddLabelsToTicketsResult> => {
+  const { membership } = await assertProjectAccess(
+    userId,
+    orgId,
+    input.projectId,
+  );
+
+  if (membership.role === "VIEWER") {
+    throw new ApiError(
+      403,
+      "You do not have permission to update tickets in this project",
+    );
+  }
+
+  const labelNames = [
+    ...new Set(
+      (input.labelNames ?? [])
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (labelNames.length === 0) {
+    throw new ApiError(400, "Please specify which labels to add.");
+  }
+
+  const labels: AddLabelsToTicketsResult["labels"] = [];
+
+  for (const name of labelNames) {
+    const label = await createOrGetProjectLabel(
+      orgId,
+      userId,
+      input.projectId,
+      {
+        name,
+        color: input.labelColor,
+      },
+    );
+
+    labels.push({
+      id: label.id,
+      name: label.name,
+      created: !label.alreadyExisted,
+    });
+  }
+
+  const { tickets, notFoundKeys } = await resolveTicketsForBulkSelector(
+    input.projectId,
+    input,
+  );
+
+  const result: AddLabelsToTicketsResult = {
+    labels,
+    labeled: [],
+    skipped: [],
+  };
+
+  for (const key of notFoundKeys) {
+    result.skipped.push({
+      ticketKey: key,
+      reason: "Ticket not found in this project",
+    });
+  }
+
+  const labelIds = labels.map((label) => label.id);
+
+  const ticketsWithLabels =
+    tickets.length === 0
+      ? []
+      : await prisma.ticket.findMany({
+          where: { id: { in: tickets.map((ticket) => ticket.id) } },
+          select: {
+            id: true,
+            ticketKey: true,
+            title: true,
+            labels: { select: { id: true } },
+          },
+        });
+
+  for (const ticket of ticketsWithLabels) {
+    const existingIds = new Set(ticket.labels.map((label) => label.id));
+    const toAdd = labelIds.filter((id) => !existingIds.has(id));
+
+    if (toAdd.length === 0) {
+      result.skipped.push({
+        ticketKey: ticket.ticketKey,
+        reason: "This ticket already has that label",
+      });
+      continue;
+    }
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        labels: {
+          connect: toAdd.map((id) => ({ id })),
+        },
+      },
+    });
+
+    result.labeled.push({
+      ticketKey: ticket.ticketKey,
+      title: ticket.title,
+    });
+  }
+
+  return result;
+};
+
+export type RemoveLabelsFromTicketsResult = {
+  labels: string[];
+  updated: { ticketKey: string; title: string }[];
+  skipped: { ticketKey: string; reason: string }[];
+};
+
+export const removeLabelsFromTickets = async (
+  orgId: string,
+  userId: string,
+  input: {
+    projectId: string;
+    labelNames: string[];
+  } & TicketBulkSelector,
+): Promise<RemoveLabelsFromTicketsResult> => {
+  const { membership } = await assertProjectAccess(
+    userId,
+    orgId,
+    input.projectId,
+  );
+
+  if (membership.role === "VIEWER") {
+    throw new ApiError(
+      403,
+      "You do not have permission to update tickets in this project",
+    );
+  }
+
+  const labelNames = [
+    ...new Set(
+      (input.labelNames ?? [])
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (labelNames.length === 0) {
+    throw new ApiError(400, "Please specify which labels to remove.");
+  }
+
+  const labelRecords = await prisma.label.findMany({
+    where: {
+      projectId: input.projectId,
+      name: { in: labelNames, mode: "insensitive" },
+    },
+    select: { id: true, name: true },
+  });
+
+  const labelsByName = new Map(
+    labelRecords.map((label) => [label.name.toLowerCase(), label]),
+  );
+
+  const missingLabels = labelNames.filter((name) => !labelsByName.has(name));
+
+  if (missingLabels.length > 0) {
+    throw new ApiError(
+      404,
+      `Label(s) not found in this project: ${missingLabels.join(", ")}`,
+    );
+  }
+
+  const labelIds = labelRecords.map((label) => label.id);
+
+  const { tickets, notFoundKeys } = await resolveTicketsForBulkSelector(
+    input.projectId,
+    input,
+  );
+
+  const result: RemoveLabelsFromTicketsResult = {
+    labels: labelNames,
+    updated: [],
+    skipped: [],
+  };
+
+  for (const key of notFoundKeys) {
+    result.skipped.push({
+      ticketKey: key,
+      reason: "Ticket not found in this project",
+    });
+  }
+
+  if (tickets.length === 0) return result;
+
+  const ticketsWithLabels = await prisma.ticket.findMany({
+    where: { id: { in: tickets.map((ticket) => ticket.id) } },
+    select: {
+      id: true,
+      ticketKey: true,
+      title: true,
+      labels: { select: { id: true } },
+    },
+  });
+
+  for (const ticket of ticketsWithLabels) {
+    const toRemove = labelIds.filter((id) =>
+      ticket.labels.some((label) => label.id === id),
+    );
+
+    if (toRemove.length === 0) {
+      result.skipped.push({
+        ticketKey: ticket.ticketKey,
+        reason: "This ticket doesn't have that label",
+      });
+      continue;
+    }
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        labels: {
+          disconnect: toRemove.map((id) => ({ id })),
+        },
+      },
+    });
+
+    result.updated.push({
+      ticketKey: ticket.ticketKey,
+      title: ticket.title,
+    });
+  }
+
+  return result;
+};
+
+export type MoveTicketsResult = {
+  columnName: string;
+  moved: { ticketKey: string; title: string }[];
+  skipped: { ticketKey: string; reason: string }[];
+};
+
+export const moveTicketsToColumn = async (
+  orgId: string,
+  userId: string,
+  input: {
+    projectId: string;
+    columnName: string;
+  } & TicketBulkSelector,
+): Promise<MoveTicketsResult> => {
+  const { membership } = await assertProjectAccess(
+    userId,
+    orgId,
+    input.projectId,
+  );
+
+  if (membership.role === "VIEWER") {
+    throw new ApiError(
+      403,
+      "You do not have permission to move tickets in this project",
+    );
+  }
+
+  const targetColumn = await resolveProjectColumnByName(
+    input.projectId,
+    input.columnName,
+  );
+
+  const { tickets, notFoundKeys } = await resolveTicketsForBulkSelector(
+    input.projectId,
+    input,
+  );
+
+  const result: MoveTicketsResult = {
+    columnName: targetColumn.name,
+    moved: [],
+    skipped: [],
+  };
+
+  for (const key of notFoundKeys) {
+    result.skipped.push({
+      ticketKey: key,
+      reason: "Ticket not found in this project",
+    });
+  }
+
+  for (const ticket of tickets) {
+    if (ticket.columnId === targetColumn.id) {
+      result.skipped.push({
+        ticketKey: ticket.ticketKey,
+        reason: `This ticket is already in ${targetColumn.name}`,
+      });
+      continue;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const maxPosition = await getColumnMaxPosition(targetColumn.id, tx);
+      const position = getAppendPosition(maxPosition);
+
+      await tx.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          columnId: targetColumn.id,
+          position,
+        },
+      });
+    });
+
+    result.moved.push({
+      ticketKey: ticket.ticketKey,
+      title: ticket.title,
+    });
+  }
+
+  return result;
+};
+
 export const deleteTicket = async (
   orgId: string,
   projectId: string,
@@ -900,7 +1118,7 @@ export const deleteTicket = async (
   const { membership } = await assertProjectAccess(userId, orgId, projectId);
 
   if (membership.role === "VIEWER") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "You do not have permission to delete tickets in this project",
     );
@@ -917,7 +1135,7 @@ export const deleteTicket = async (
   });
 
   if (!ticket || ticket.project.organizationId !== orgId) {
-    throw new TicketServiceError(404, "Ticket not found");
+    throw new ApiError(404, "Ticket not found");
   }
 
   await prisma.ticket.delete({ where: { id: ticketId } });

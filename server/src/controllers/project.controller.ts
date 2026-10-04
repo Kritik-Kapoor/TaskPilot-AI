@@ -43,7 +43,6 @@ import {
   createIssueType as createIssueTypeService,
   getIssueTypesWithCounts,
 } from "../services/ticketType.service.js";
-import { TicketServiceError } from "../services/ticket.service.js";
 import { getWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { GetUserRoleInProjectInput } from "../schemas/auth.schema.js";
 
@@ -930,7 +929,7 @@ export const createIssueType = async (req: Request, res: Response) => {
       "Issue type created successfully",
     ).send(res);
   } catch (error) {
-    if (error instanceof TicketServiceError) {
+    if (error instanceof ApiError) {
       return new ApiResponse(error.statusCode, null, error.message).send(res);
     }
     return new ApiError(500, getErrorMessage(error)).send(res);

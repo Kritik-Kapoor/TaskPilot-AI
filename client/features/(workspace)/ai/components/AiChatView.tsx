@@ -50,6 +50,61 @@ function ActionBadge({ action }: { action: AiAction }) {
           <ExternalLink className="h-3 w-3" /> {action.ticket.ticketKey}
         </span>
       );
+    case "create_label":
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-violet-500/10 px-2 py-1 text-[11px] font-medium text-violet-600">
+          <Tag className="h-3 w-3" />
+          {action.alreadyExisted
+            ? `Label: ${action.label.name}`
+            : `Created: ${action.label.name}`}
+        </span>
+      );
+    case "apply_labels": {
+      const names = action.labels.map((label) => label.name).join(", ");
+      const count = action.labeled.length;
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-violet-500/10 px-2 py-1 text-[11px] font-medium text-violet-600">
+          <Tag className="h-3 w-3" />
+          {count > 0
+            ? count > 3
+              ? `${names} → ${count} tickets`
+              : `${names} → ${action.labeled.map((t) => t.ticketKey).join(", ")}`
+            : "No labels added"}
+          {action.skipped.length > 0 && ` (${action.skipped.length} skipped)`}
+        </span>
+      );
+    }
+    case "remove_labels": {
+      const count = action.updated.length;
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-violet-500/10 px-2 py-1 text-[11px] font-medium text-violet-600">
+          <Tag className="h-3 w-3" />
+          {count > 0
+            ? `Removed ${action.labels.join(", ")} from ${count} ticket${count > 1 ? "s" : ""}`
+            : "No labels removed"}
+          {action.skipped.length > 0 && ` (${action.skipped.length} skipped)`}
+        </span>
+      );
+    }
+    case "delete_label":
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-violet-500/10 px-2 py-1 text-[11px] font-medium text-violet-600">
+          <Tag className="h-3 w-3" />
+          Deleted {action.label.name} ({action.label.ticketsAffected} tickets)
+        </span>
+      );
+    case "move_tickets": {
+      const count = action.moved.length;
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand">
+          <SquareKanban className="h-3 w-3" />
+          {count > 0
+            ? `${count} ticket${count > 1 ? "s" : ""} → ${action.columnName}`
+            : "No tickets moved"}
+          {action.skipped.length > 0 && ` (${action.skipped.length} skipped)`}
+        </span>
+      );
+    }
     case "assign_tickets": {
       const updated = action.results.filter(
         (r) => r.assigned.length + r.reassigned.length > 0,
@@ -94,7 +149,13 @@ function ChatMessage({ msg }: { msg: AiMessage }) {
         )}
       >
         <p className="whitespace-pre-wrap">{msg.content}</p>
-        {msg.action && <ActionBadge action={msg.action} />}
+        {msg.actions && msg.actions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {msg.actions.map((action, index) => (
+              <ActionBadge key={`${msg.id}-${action.type}-${index}`} action={action} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

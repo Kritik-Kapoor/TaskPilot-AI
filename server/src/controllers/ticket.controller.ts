@@ -17,14 +17,13 @@ import {
   getProjectColumns,
   getProjectTickets,
   getTicketById,
-  TicketServiceError,
   updateTicket,
 } from "../services/ticket.service.js";
 import { getWorkspaceUser } from "../middlewares/authenticateWorkspaceUser.middleware.js";
 import { ProjectIdParams } from "../schemas/project.schema.js";
 
 const handleTicketServiceError = (error: unknown, res: Response) => {
-  if (error instanceof TicketServiceError) {
+  if (error instanceof ApiError) {
     return new ApiResponse(error.statusCode, null, error.message).send(res);
   }
 

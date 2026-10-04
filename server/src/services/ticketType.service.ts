@@ -6,7 +6,7 @@ import {
   getProjectMembership,
   isDuplicateNameError,
 } from "./project.service.js";
-import { TicketServiceError } from "./ticket.service.js";
+import { ApiError } from "../utils/apiResponse.js";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -59,13 +59,13 @@ export const createIssueType = async (
   const project = await findProjectInOrg(projectId, orgId);
 
   if (!project) {
-    throw new TicketServiceError(404, "Project not found");
+    throw new ApiError(404, "Project not found");
   }
 
   const membership = await getProjectMembership(userId, projectId);
 
   if (membership?.role !== "ADMIN") {
-    throw new TicketServiceError(
+    throw new ApiError(
       403,
       "Only project admins can create issue types",
     );
@@ -92,7 +92,7 @@ export const createIssueType = async (
     return { ...rest, ticketCount: _count.tickets };
   } catch (error) {
     if (isDuplicateNameError(error)) {
-      throw new TicketServiceError(
+      throw new ApiError(
         409,
         "An issue type with that key already exists",
       );
