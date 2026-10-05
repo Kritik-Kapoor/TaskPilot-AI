@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAiChat } from "../AiChatProvider";
+import { renderChatMessageContent } from "../lib/chatMessageContent";
 import type { AiAction, AiMessage } from "../types";
 
 const SUGGESTIONS = [
@@ -180,7 +181,9 @@ function ChatMessage({ msg }: { msg: AiMessage }) {
             : "rounded-tl-md border border-border bg-muted/40",
         )}
       >
-        <p className="whitespace-pre-wrap">{msg.content}</p>
+        <p className="whitespace-pre-wrap">
+          {renderChatMessageContent(msg.content)}
+        </p>
         {msg.actions && msg.actions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {msg.actions.map((action, index) => (
@@ -278,10 +281,10 @@ function AiChatInput({
 }
 
 const AiChatView = () => {
-  const { messages, isLoading, send } = useAiChat();
+  const { messages, isLoading, isHistoryLoading, send } = useAiChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const hasConversation = messages.length > 0 || isLoading;
+  const hasConversation = messages.length > 0 || isLoading || isHistoryLoading;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -299,6 +302,15 @@ const AiChatView = () => {
     if (isLoading) return;
     send(text);
   };
+
+  if (isHistoryLoading && messages.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-8 text-sm text-muted-foreground">
+        <Loader2 className="mb-2 h-5 w-5 animate-spin" />
+        Loading conversation…
+      </div>
+    );
+  }
 
   if (!hasConversation) {
     return (

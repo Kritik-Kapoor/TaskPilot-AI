@@ -97,4 +97,5 @@ export type AiMessage = {
   role: "user" | "assistant";
   content: string;
   actions?: AiAction[];
+  createdAt?: string;
 };

@@ -5,8 +5,8 @@ import type {
   UpdateTicketInput,
 } from "../schemas/ticket.schema.js";
 import {
+  assertProjectAccess,
   createOrGetProjectLabel,
-  findProjectInOrg,
   getProjectMembership,
 } from "./project.service.js";
 import { normalizeStoredTicketDescription } from "../utils/ticketDescription.utils.js";
@@ -81,24 +81,6 @@ const ticketSelect = {
 } satisfies Prisma.TicketSelect;
 
 type TransactionClient = Prisma.TransactionClient;
-
-const assertProjectAccess = async (
-  userId: string,
-  orgId: string,
-  projectId: string,
-) => {
-  const project = await findProjectInOrg(projectId, orgId);
-
-  if (!project) throw new ApiError(404, "Project not found");
-
-  const membership = await getProjectMembership(userId, projectId);
-
-  if (!membership) {
-    throw new ApiError(403, "You are not a member of this project");
-  }
-
-  return { project, membership };
-};
 
 const resolveColumn = async (
   projectId: string,

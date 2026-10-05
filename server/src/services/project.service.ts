@@ -58,6 +58,22 @@ export const findProjectInOrg = (projectId: string, orgId: string) =>
     select: { id: true, projectName: true, projectKey: true, isDefault: true },
   });
 
+export const assertProjectAccess = async (
+  userId: string,
+  orgId: string,
+  projectId: string,
+) => {
+  const project = await findProjectInOrg(projectId, orgId);
+  if (!project) throw new ApiError(404, "Project not found");
+
+  const membership = await getProjectMembership(userId, projectId);
+  if (!membership) {
+    throw new ApiError(403, "You are not a member of this project");
+  }
+
+  return { project, membership };
+};
+
 export async function createProjectWithMembership(
   orgId: string,
   userId: string,

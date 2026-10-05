@@ -21,6 +21,7 @@ import {
 } from "./ai.tool-executor.js";
 import { AiChatError } from "./ai.errors.js";
 import { ApiError } from "../utils/apiResponse.js";
+import type { AiChatHistoryTurn } from "./aiChatHistory.service.js";
 import type { AiAction, AiChatResponse } from "./ai.types.js";
 import { formatTodayInTimeZone } from "../utils/assignmentDate.utils.js";
 
@@ -104,6 +105,7 @@ Examples:
 
 type ProcessInput = {
   message: string;
+  history: AiChatHistoryTurn[];
   userId: string;
   orgId: string;
   projectId: string;
@@ -646,6 +648,10 @@ export async function processAiChat(
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: buildSystemPrompt(input.timeZone) },
+    ...input.history.map((turn) => ({
+      role: turn.role,
+      content: turn.content,
+    })),
     { role: "user", content: input.message },
   ];
 
@@ -658,6 +664,7 @@ export async function processAiChat(
       tools: aiTools,
       tool_choice: "auto",
       parallel_tool_calls: true,
+      reasoning_effort: "none",
     });
 
     const assistantMessage = completion.choices[0]!.message;

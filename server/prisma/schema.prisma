@@ -25,6 +25,7 @@ model User {
   assignedTickets         Ticket[]                  @relation("TicketAssignee")
   createdTickets          Ticket[]                  @relation("TicketCreator")
   comments Comment[]
+  aiChatMessages AiChatMessage[]
 
   @@index([organizationId])
 }
@@ -62,6 +63,7 @@ model Project {
   columns        BoardColumn[]
   labels         Label[]
   issueTypes    IssueType[]
+  aiChatMessages AiChatMessage[]
 
   @@unique([organizationId, projectName])
   @@unique([organizationId, projectKey])
@@ -166,6 +168,21 @@ model IssueType {
   @@unique([projectId, key])
 }
 
+model AiChatMessage {
+  id        String            @id @default(uuid())
+  userId    String
+  projectId String
+  role      AiChatMessageRole
+  content   String
+  actions   Json?
+  createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, projectId, createdAt])
+}
+
+
 enum OrganizationRole {
   OWNER
   ADMIN
@@ -184,3 +201,9 @@ enum TicketPriority {
   HIGH
   URGENT
 }
+
+enum AiChatMessageRole {
+  USER
+  ASSISTANT
+}
+

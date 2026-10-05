@@ -4,16 +4,18 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AiAction, AiMessage } from "./types";
-import { sendAiChat } from "./api";
+import { aiChatHistoryQueryKey, fetchAiChatHistory, sendAiChat } from "./api";
 
 type AiChatContextType = {
   messages: AiMessage[];
   isLoading: boolean;
+  isHistoryLoading: boolean;
   send: (text: string) => Promise<void>;
   pendingAction: AiAction | null;
   consumeAction: () => void;
@@ -24,6 +26,11 @@ const AiChatContext = createContext<AiChatContextType | null>(null);
 let nextId = 0;
 const uid = () => `ai-${++nextId}`;
 
+type MessageListState = {
+  projectId: string;
+  messages: AiMessage[];
+};
+
 export function AiChatProvider({
   children,
   projectId,
@@ -32,9 +39,23 @@ export function AiChatProvider({
   projectId: string | null;
 }) {
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [messageList, setMessageList] = useState<MessageListState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<AiAction | null>(null);
+
+  const { data: historyData, isPending: isHistoryLoading } = useQuery({
+    queryKey: aiChatHistoryQueryKey(projectId ?? ""),
+    queryFn: () => fetchAiChatHistory(projectId!),
+    enabled: Boolean(projectId),
+  });
+
+  const messages = useMemo(() => {
+    const base = historyData?.messages ?? [];
+    if (messageList && messageList.projectId === projectId) {
+      return [...base, ...messageList.messages];
+    }
+    return base;
+  }, [historyData?.messages, messageList, projectId]);
 
   const consumeAction = useCallback(() => setPendingAction(null), []);
 
@@ -47,7 +68,7 @@ export function AiChatProvider({
         role: "user",
         content: text.trim(),
       };
-      setMessages((prev) => [...prev, userMsg]);
+      setMessageList({ projectId, messages: [userMsg] });
       setIsLoading(true);
 
       try {
@@ -62,7 +83,12 @@ export function AiChatProvider({
           actions,
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        setMessageList({ projectId, messages: [userMsg, assistantMsg] });
+
+        await queryClient.invalidateQueries({
+          queryKey: aiChatHistoryQueryKey(projectId),
+        });
+        setMessageList(null);
 
         if (actions.length > 0) {
           const types = new Set(actions.map((action) => action.type));
@@ -118,7 +144,7 @@ export function AiChatProvider({
               ? error.message
               : "Something went wrong. Please try again.",
         };
-        setMessages((prev) => [...prev, errorMsg]);
+        setMessageList({ projectId, messages: [userMsg, errorMsg] });
       } finally {
         setIsLoading(false);
       }
@@ -131,6 +157,7 @@ export function AiChatProvider({
       value={{
         messages,
         isLoading,
+        isHistoryLoading: Boolean(projectId) && isHistoryLoading,
         send,
         pendingAction,
         consumeAction,
