@@ -1,7 +1,15 @@
 import { prisma } from "../config/db.js";
 import { AiChatError } from "./ai.errors.js";
 import type { AiAction, AssignTicketsActionResult } from "./ai.types.js";
-import { MAX_ASSIGNMENTS_PER_REQUEST } from "./ai.tools.js";
+import {
+  MAX_ASSIGNMENTS_PER_REQUEST,
+  MAX_BATCH_CREATE_ITEMS,
+} from "./ai.tools.js";
+import {
+  createProjectBoardColumn,
+  deleteProjectBoardColumn,
+  isBacklogColumnName,
+} from "../services/boardColumn.service.js";
 import {
   addLabelsToTickets,
   assignOrReassignTickets,
@@ -305,10 +313,28 @@ export async function executeCreateTicket(
   return { action, assignment };
 }
 
-export async function executeCreateLabel(
+const batchItemErrorMessage = (error: unknown) => {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof AiChatError) return error.message;
+  if (error instanceof Error) return error.message;
+  return "Unknown error";
+};
+
+const assertBatchLength = (length: number, itemName: string) => {
+  if (length < 1) {
+    throw new AiChatError(`Provide at least one ${itemName}.`);
+  }
+  if (length > MAX_BATCH_CREATE_ITEMS) {
+    throw new AiChatError(
+      `You can create at most ${MAX_BATCH_CREATE_ITEMS} ${itemName} at once.`,
+    );
+  }
+};
+
+async function createLabelAction(
   args: { name: string; color?: string },
   ctx: ToolContext,
-): Promise<AiAction> {
+): Promise<Extract<AiAction, { type: "create_label" }>> {
   const label = await createOrGetProjectLabel(
     ctx.orgId,
     ctx.userId,
@@ -321,6 +347,293 @@ export async function executeCreateLabel(
     label: { id: label.id, name: label.name, color: label.color },
     alreadyExisted: label.alreadyExisted,
   };
+}
+
+export async function executeCreateLabels(
+  args: {
+    labels?: { name: string; color?: string }[];
+    name?: string;
+    color?: string;
+  },
+  ctx: ToolContext,
+): Promise<{
+  actions: Extract<AiAction, { type: "create_label" }>[];
+  errors: string[];
+}> {
+  const labels =
+    args.labels ??
+    (args.name ? [{ name: args.name, color: args.color }] : undefined);
+
+  if (!labels?.length) {
+    throw new AiChatError("Provide a labels array with at least one name.");
+  }
+
+  assertBatchLength(labels.length, "labels");
+
+  const actions: Extract<AiAction, { type: "create_label" }>[] = [];
+  const errors: string[] = [];
+
+  for (const label of labels) {
+    try {
+      actions.push(await createLabelAction(label, ctx));
+    } catch (error) {
+      errors.push(`"${label.name}": ${batchItemErrorMessage(error)}`);
+    }
+  }
+
+  if (actions.length === 0 && errors.length > 0) {
+    throw new AiChatError(errors.join("; "));
+  }
+
+  return { actions, errors };
+}
+
+export async function executeCreateIssueTypes(
+  args: {
+    issueTypes?: { key: string; color: string }[];
+    key?: string;
+    color?: string;
+  },
+  ctx: ToolContext,
+): Promise<{
+  actions: Extract<AiAction, { type: "create_issue_type" }>[];
+  errors: string[];
+}> {
+  const issueTypes =
+    args.issueTypes ??
+    (args.key && args.color
+      ? [{ key: args.key, color: args.color }]
+      : undefined);
+
+  if (!issueTypes?.length) {
+    throw new AiChatError(
+      "Provide an issueTypes array with at least one key and color.",
+    );
+  }
+
+  assertBatchLength(issueTypes.length, "issue types");
+
+  const actions: Extract<AiAction, { type: "create_issue_type" }>[] = [];
+  const errors: string[] = [];
+
+  for (const issueType of issueTypes) {
+    try {
+      actions.push(
+        (await executeCreateIssueType(issueType, ctx)) as Extract<
+          AiAction,
+          { type: "create_issue_type" }
+        >,
+      );
+    } catch (error) {
+      errors.push(`"${issueType.key}": ${batchItemErrorMessage(error)}`);
+    }
+  }
+
+  if (actions.length === 0 && errors.length > 0) {
+    throw new AiChatError(errors.join("; "));
+  }
+
+  return { actions, errors };
+}
+
+const findBoardColumnByName = async (projectId: string, columnName: string) =>
+  prisma.boardColumn.findFirst({
+    where: {
+      projectId,
+      name: { equals: columnName.trim(), mode: "insensitive" },
+    },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { tickets: true } },
+    },
+  });
+
+export type DeleteBoardColumnEntry = {
+  columnName: string;
+  ticketDisposition?: "move" | "delete_all";
+  moveToColumnName?: string;
+};
+
+export const normalizeDeleteBoardColumnArgs = (args: {
+  columns?: DeleteBoardColumnEntry[];
+  columnName?: string;
+  ticketDisposition?: "move" | "delete_all";
+  moveToColumnName?: string;
+}): DeleteBoardColumnEntry[] => {
+  if (args.columns?.length) return args.columns;
+
+  const single = args.columnName?.trim();
+  if (single) {
+    return [
+      {
+        columnName: single,
+        ticketDisposition: args.ticketDisposition,
+        moveToColumnName: args.moveToColumnName,
+      },
+    ];
+  }
+
+  return [];
+};
+
+export async function executeDeleteBoardColumns(
+  args: {
+    columns?: DeleteBoardColumnEntry[];
+    columnName?: string;
+    ticketDisposition?: "move" | "delete_all";
+    moveToColumnName?: string;
+  },
+  ctx: ToolContext,
+): Promise<{
+  actions: Extract<AiAction, { type: "delete_board_column" }>[];
+  errors: string[];
+}> {
+  const columns = normalizeDeleteBoardColumnArgs(args);
+
+  if (!columns.length) {
+    throw new AiChatError(
+      "Provide columnName (one column) or a columns array with columnName entries.",
+    );
+  }
+
+  assertBatchLength(columns.length, "board columns");
+
+  const actions: Extract<AiAction, { type: "delete_board_column" }>[] = [];
+  const errors: string[] = [];
+
+  for (const entry of columns) {
+    try {
+      const column = await findBoardColumnByName(
+        ctx.projectId,
+        entry.columnName,
+      );
+
+      if (!column) {
+        errors.push(
+          `Column "${entry.columnName}": no board column with that name exists`,
+        );
+        continue;
+      }
+
+      if (isBacklogColumnName(column.name)) {
+        errors.push(`Column "${column.name}": Backlog cannot be deleted`);
+        continue;
+      }
+
+      const ticketCount = column._count.tickets;
+      let deleteOptions: {
+        ticketDisposition?: "move" | "delete_all";
+        targetColumnId?: string;
+      } = {};
+
+      if (ticketCount > 0) {
+        if (!entry.ticketDisposition) {
+          throw new AiChatError(
+            `Column "${column.name}" has ${ticketCount} ticket${ticketCount === 1 ? "" : "s"}. ` +
+              `Ask the user whether to move them to another column (ticketDisposition "move" with moveToColumnName) ` +
+              `or delete those tickets with the column (ticketDisposition "delete_all").`,
+          );
+        }
+
+        if (entry.ticketDisposition === "move") {
+          const targetName = entry.moveToColumnName?.trim();
+          if (!targetName) {
+            throw new AiChatError(
+              `Column "${column.name}": moveToColumnName is required when ticketDisposition is "move".`,
+            );
+          }
+
+          const target = await findBoardColumnByName(ctx.projectId, targetName);
+
+          if (!target) {
+            errors.push(
+              `Column "${entry.columnName}": move target "${targetName}" was not found`,
+            );
+            continue;
+          }
+
+          deleteOptions = {
+            ticketDisposition: "move",
+            targetColumnId: target.id,
+          };
+        } else {
+          deleteOptions = { ticketDisposition: "delete_all" };
+        }
+      }
+
+      const result = await deleteProjectBoardColumn(
+        ctx.orgId,
+        ctx.userId,
+        ctx.projectId,
+        column.id,
+        deleteOptions,
+      );
+
+      actions.push({
+        type: "delete_board_column",
+        column: { name: column.name },
+        ticketsAffected: ticketCount,
+        restoredDefaultColumns: result.restoredDefaultColumns,
+      });
+    } catch (error) {
+      errors.push(`"${entry.columnName}": ${batchItemErrorMessage(error)}`);
+    }
+  }
+
+  if (actions.length === 0 && errors.length > 0) {
+    throw new AiChatError(errors.join("; "));
+  }
+
+  return { actions, errors };
+}
+
+export async function executeCreateBoardColumns(
+  args: { columns: { name: string; color?: string }[] },
+  ctx: ToolContext,
+): Promise<{
+  actions: Extract<AiAction, { type: "create_board_column" }>[];
+  errors: string[];
+}> {
+  const columns = args.columns;
+
+  if (!columns?.length) {
+    throw new AiChatError("Provide a columns array with at least one name.");
+  }
+
+  assertBatchLength(columns.length, "board columns");
+
+  const actions: Extract<AiAction, { type: "create_board_column" }>[] = [];
+  const errors: string[] = [];
+
+  for (const column of columns) {
+    try {
+      const created = await createProjectBoardColumn(
+        ctx.orgId,
+        ctx.userId,
+        ctx.projectId,
+        column,
+      );
+
+      actions.push({
+        type: "create_board_column",
+        column: {
+          id: created.id,
+          name: created.name,
+          color: created.color,
+        },
+        alreadyExisted: created.alreadyExisted,
+      });
+    } catch (error) {
+      errors.push(`"${column.name}": ${batchItemErrorMessage(error)}`);
+    }
+  }
+
+  if (actions.length === 0 && errors.length > 0) {
+    throw new AiChatError(errors.join("; "));
+  }
+
+  return { actions, errors };
 }
 
 type TicketSelectorArg = {
@@ -380,11 +693,25 @@ export async function executeDeleteLabel(
   args: { name: string },
   ctx: ToolContext,
 ): Promise<AiAction> {
+  const labelName = args.name?.trim();
+  if (!labelName) {
+    throw new AiChatError("Provide the label name to delete.");
+  }
+
+  const matchingColumn = await findBoardColumnByName(ctx.projectId, labelName);
+
+  if (matchingColumn) {
+    throw new AiChatError(
+      `"${matchingColumn.name}" is a board column (stage), not a label. ` +
+        `Use delete_board_column with columnName "${matchingColumn.name}" instead.`,
+    );
+  }
+
   const result = await deleteProjectLabelByName(
     ctx.orgId,
     ctx.userId,
     ctx.projectId,
-    args.name,
+    labelName,
   );
 
   return {
@@ -533,3 +860,28 @@ export function executeOpenConfig(args: {
     tab: args.tab,
   };
 }
+
+const WORKSPACE_PAGE_PATH: Record<
+  "board" | "backlog" | "inbox" | "assistant" | "members" | "settings",
+  string
+> = {
+  board: "/board",
+  backlog: "/backlog",
+  inbox: "/inbox",
+  assistant: "/assistant",
+  members: "/members",
+  settings: "/settings",
+};
+
+export function executeNavigateWorkspace(args: {
+  page: keyof typeof WORKSPACE_PAGE_PATH;
+}): Extract<AiAction, { type: "navigate_page" }> {
+  const page = args.page;
+  if (!(page in WORKSPACE_PAGE_PATH)) {
+    throw new AiChatError(`Unknown page "${String(page)}"`);
+  }
+
+  return { type: "navigate_page", page };
+}
+
+export { WORKSPACE_PAGE_PATH };

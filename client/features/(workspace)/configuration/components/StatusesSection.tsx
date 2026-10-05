@@ -4,6 +4,7 @@ import { ColorPickerPopover } from "@/components/common/ColorPickerPopover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import useStatusesSection from "@/features/(workspace)/configuration/hooks/useStatusesSection";
+import DeleteColumnDialog from "@/features/(workspace)/configuration/components/DeleteColumnDialog";
 import { getPositionBetween } from "@/features/(workspace)/board/lib/utils/ticketPosition";
 import { cn } from "@/lib/utils";
 import {
@@ -74,7 +75,7 @@ function SortableColumnRow({
     disabled: isBacklog || !canManage || isEditing,
   });
 
-  const canDelete = canManage && !isBacklog && (column.ticketCount ?? 0) === 0;
+  const canDelete = canManage && !isBacklog;
 
   return (
     <div
@@ -180,11 +181,7 @@ function SortableColumnRow({
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     disabled={!canDelete || isDeleting}
                     onClick={onDelete}
-                    title={
-                      (column.ticketCount ?? 0) > 0
-                        ? "Move tickets out before deleting"
-                        : `Delete ${column.name}`
-                    }
+                    title={`Delete ${column.name}`}
                     aria-label={`Delete ${column.name}`}
                   >
                     {isDeleting ? (
@@ -232,8 +229,11 @@ const StatusesSection = ({ canManage }: StatusesSectionProps) => {
       startEditing,
       cancelEditing,
       handleSubmit,
-      deleteColumn,
+      requestDeleteColumn,
+      confirmDeleteColumn,
+      cancelDeleteColumn,
     },
+    columnPendingDelete,
   } = useStatusesSection(canManage);
 
   const [optimisticOrder, setOptimisticOrder] = useState<BoardColumn[] | null>(
@@ -372,10 +372,12 @@ const StatusesSection = ({ canManage }: StatusesSectionProps) => {
               isUpdating={isUpdating}
               editName={editName}
               editColor={editColor}
-              onStartEdit={() => startEditing(column)}
+              onStartEdit={() => {
+                if (!isBacklog(column.name)) startEditing(column);
+              }}
               onCancelEdit={cancelEditing}
               onSubmitEdit={() => handleSubmit("edit", column.id)}
-              onDelete={() => deleteColumn(column.id)}
+              onDelete={() => requestDeleteColumn(column)}
               onEditName={setEditName}
               onEditColor={setEditColor}
             />
@@ -387,6 +389,15 @@ const StatusesSection = ({ canManage }: StatusesSectionProps) => {
           )}
         </div>
       </DragDropProvider>
+
+      <DeleteColumnDialog
+        open={Boolean(columnPendingDelete)}
+        column={columnPendingDelete}
+        columns={columns}
+        isDeleting={Boolean(deletingColumnId)}
+        onClose={cancelDeleteColumn}
+        onConfirm={(options) => confirmDeleteColumn(options)}
+      />
     </div>
   );
 };

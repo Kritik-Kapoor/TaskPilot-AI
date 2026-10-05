@@ -12,27 +12,33 @@ import {
   updateBoardColumn,
 } from "@/features/(workspace)/configuration/api";
 import { useProject } from "@/providers/projectProvider";
+import { useWorkspaceUi } from "@/providers/workspaceUiProvider";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { projectBoardQueryPrefix } from "@/features/(workspace)/board/api";
+import { DeleteBoardColumnPayload } from "../types";
 
 const BACKLOG_NAME_LOWER = "backlog";
 
 const useStatusesSection = (canManage: boolean) => {
   const queryClient = useQueryClient();
   const { activeProject } = useProject();
+  const { openConfiguration } = useWorkspaceUi();
   const projectId = activeProject?.id ?? "";
 
   const [draftName, setDraftName] = useState("");
+  const [columnPendingDelete, setColumnPendingDelete] =
+    useState<BoardColumn | null>(null);
   const [draftColor, setDraftColor] = useState("#6366f1");
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("#6366f1");
 
   const {
-    data,
+    data: boardColumns,
     isPending: isLoading,
-    isError,
+    isError: boardColumnsError,
   } = useQuery({
     queryKey: projectColumnsQueryKey(projectId),
     queryFn: () => getProjectColumns(projectId),
@@ -51,7 +57,14 @@ const useStatusesSection = (canManage: boolean) => {
     queryClient.invalidateQueries({
       queryKey: projectColumnsQueryKey(projectId),
     });
+    queryClient.invalidateQueries({
+      queryKey: projectBoardQueryPrefix(projectId),
+    });
   }, [projectId, queryClient]);
+
+  const focusStatusesTab = useCallback(() => {
+    openConfiguration("statuses");
+  }, [openConfiguration]);
 
   const createMutation = useMutation({
     mutationFn: (payload: { name: string; color: string }) =>
@@ -67,6 +80,7 @@ const useStatusesSection = (canManage: boolean) => {
       setDraftName("");
       setDraftColor("#6366f1");
       toast.success("Column created");
+      focusStatusesTab();
     },
     onError: (error) => {
       toast.error(
@@ -100,6 +114,7 @@ const useStatusesSection = (canManage: boolean) => {
       );
       setEditingColumnId(null);
       toast.success("Column updated");
+      focusStatusesTab();
     },
     onError: (error) => {
       toast.error(
@@ -112,8 +127,14 @@ const useStatusesSection = (canManage: boolean) => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (columnId: string) => deleteBoardColumn(projectId, columnId),
-    onSuccess: (_, columnId) => {
+    mutationFn: ({
+      columnId,
+      payload,
+    }: {
+      columnId: string;
+      payload?: DeleteBoardColumnPayload;
+    }) => deleteBoardColumn(projectId, columnId, payload),
+    onSuccess: (result, { columnId }) => {
       queryClient.setQueryData(
         projectColumnsQueryKey(projectId),
         (old: { columns: BoardColumn[] } | undefined) => {
@@ -121,7 +142,15 @@ const useStatusesSection = (canManage: boolean) => {
           return { columns: old.columns.filter((c) => c.id !== columnId) };
         },
       );
-      toast.success("Column deleted");
+      setColumnPendingDelete(null);
+      if (result.restoredDefaultColumns) {
+        toast.message(
+          "All workflow columns were removed. Default board columns were restored.",
+        );
+      } else {
+        toast.success("Column deleted");
+      }
+      focusStatusesTab();
     },
     onError: (error) => {
       toast.error(
@@ -161,14 +190,38 @@ const useStatusesSection = (canManage: boolean) => {
     },
     onSettled: () => {
       invalidateColumns();
+      focusStatusesTab();
     },
   });
 
-  const columns = data?.columns ?? [];
+  const columns = useMemo(
+    () => boardColumns?.columns ?? [],
+    [boardColumns?.columns],
+  );
 
   const isBacklog = useCallback(
     (name: string) => name.toLowerCase() === BACKLOG_NAME_LOWER,
     [],
+  );
+
+  const requestDeleteColumn = useCallback(
+    (column: BoardColumn) => {
+      if (isBacklog(column.name)) return;
+      focusStatusesTab();
+      setColumnPendingDelete(column);
+    },
+    [focusStatusesTab, isBacklog],
+  );
+
+  const confirmDeleteColumn = useCallback(
+    (payload?: DeleteBoardColumnPayload) => {
+      if (!columnPendingDelete) return;
+      deleteMutation.mutate({
+        columnId: columnPendingDelete.id,
+        payload,
+      });
+    },
+    [columnPendingDelete, deleteMutation],
   );
 
   const handleSubmit = useCallback(
@@ -180,11 +233,17 @@ const useStatusesSection = (canManage: boolean) => {
         return;
       }
       if (type === "create") createMutation.mutate({ name, color: draftColor });
-      if (type === "edit")
+      if (type === "edit") {
+        const target = columns.find((c) => c.id === columnId);
+        if (target && isBacklog(target.name)) {
+          toast.error("The Backlog column cannot be edited");
+          return;
+        }
         updateMutation.mutate({
           columnId: columnId!,
           payload: { name, color: editColor },
         });
+      }
     },
     [
       canManage,
@@ -195,6 +254,8 @@ const useStatusesSection = (canManage: boolean) => {
       editName,
       projectId,
       updateMutation,
+      columns,
+      isBacklog,
     ],
   );
 
@@ -209,7 +270,7 @@ const useStatusesSection = (canManage: boolean) => {
   return {
     columns,
     isLoading,
-    isError,
+    isError: boardColumnsError,
     canManage,
     isBacklog,
     handleReorder,
@@ -223,7 +284,7 @@ const useStatusesSection = (canManage: boolean) => {
       isCreating: createMutation.isPending,
       isUpdating: updateMutation.isPending,
       deletingColumnId: deleteMutation.isPending
-        ? deleteMutation.variables
+        ? (deleteMutation.variables?.columnId ?? null)
         : null,
     },
     actions: {
@@ -234,8 +295,11 @@ const useStatusesSection = (canManage: boolean) => {
       startEditing,
       cancelEditing,
       handleSubmit,
-      deleteColumn: deleteMutation.mutate,
+      requestDeleteColumn,
+      confirmDeleteColumn,
+      cancelDeleteColumn: () => setColumnPendingDelete(null),
     },
+    columnPendingDelete,
   };
 };
 

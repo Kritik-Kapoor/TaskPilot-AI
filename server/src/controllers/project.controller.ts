@@ -8,6 +8,7 @@ import { prisma } from "../config/db.js";
 import type {
   BoardColumnParams,
   BoardColumnBody,
+  DeleteBoardColumnBody,
   CreateIssueTypeBody,
   CreateLabelBody,
   CreateProjectInput,
@@ -39,6 +40,11 @@ import {
   setProjectDefaultStatus,
   updateProjectDetails,
 } from "../services/project.service.js";
+import {
+  createProjectBoardColumn,
+  deleteProjectBoardColumn,
+  updateProjectBoardColumn,
+} from "../services/boardColumn.service.js";
 import {
   createIssueType as createIssueTypeService,
   getIssueTypesWithCounts,
@@ -964,171 +970,87 @@ export const deleteIssueType = async (req: Request, res: Response) => {
 
 export const createBoardColumn = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.user!;
+    const { userId, orgId } = getWorkspaceUser(req);
     const { projectId } = req.validated!.params as ProjectIdParams;
     const { name, color } = req.validated!.body as BoardColumnBody;
 
-    const memberAccess = await getProjectMembership(userId, projectId);
+    const column = await createProjectBoardColumn(orgId, userId, projectId, {
+      name,
+      color,
+    });
 
-    if (memberAccess?.role !== "ADMIN") {
-      return new ApiResponse(
-        403,
-        null,
-        "Only project admins can create board columns",
-      ).send(res);
-    }
-
-    if (name.trim().toLowerCase() === "backlog") {
-      return new ApiResponse(400, null, '"Backlog" column already exists').send(
+    if (column.alreadyExisted) {
+      return new ApiResponse(200, column, "Board column already exists").send(
         res,
       );
     }
 
-    const last = await prisma.boardColumn.findFirst({
-      where: { projectId },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    });
-
-    const position = (last?.position ?? 0) + 1000;
-
-    const newColumn = await prisma.boardColumn.create({
-      data: { name: name.trim(), color, projectId, position },
-      select: {
-        id: true,
-        name: true,
-        color: true,
-        position: true,
-        _count: { select: { tickets: true } },
-      },
-    });
-
-    const { _count, ...rest } = newColumn;
-
     return new ApiResponse(
       201,
-      { ...rest, ticketCount: _count.tickets },
+      column,
       "Board column created successfully",
     ).send(res);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
 export const updateBoardColumn = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.user!;
+    const { userId, orgId } = getWorkspaceUser(req);
     const { projectId, columnId } = req.validated!.params as BoardColumnParams;
     const body = req.validated!.body as BoardColumnBody;
 
-    const memberAccess = await getProjectMembership(userId, projectId);
-
-    if (memberAccess?.role !== "ADMIN") {
-      return new ApiResponse(
-        403,
-        null,
-        "Only project admins can update board columns",
-      ).send(res);
-    }
-
-    const existing = await prisma.boardColumn.findUnique({
-      where: { id: columnId, projectId },
-      select: { name: true },
-    });
-
-    if (!existing) {
-      return new ApiResponse(404, null, "Column not found").send(res);
-    }
-
-    const isBacklog = existing.name.toLowerCase() === "backlog";
-
-    if (isBacklog) {
-      return new ApiResponse(400, null, "Cannot update backlog column").send(
-        res,
-      );
-    }
-
-    if (body.name?.trim().toLowerCase() === "backlog") {
-      return new ApiResponse(
-        400,
-        null,
-        '"Backlog" column already exists"',
-      ).send(res);
-    }
-
-    const updated = await prisma.boardColumn.update({
-      where: { id: columnId, projectId },
-      data: {
-        name: body.name.trim(),
-        color: body.color,
-      },
-      select: {
-        id: true,
-        name: true,
-        color: true,
-        position: true,
-        _count: { select: { tickets: true } },
-      },
-    });
-
-    const { _count, ...rest } = updated;
+    const column = await updateProjectBoardColumn(
+      orgId,
+      userId,
+      projectId,
+      columnId,
+      body,
+    );
 
     return new ApiResponse(
       200,
-      { ...rest, ticketCount: _count.tickets },
+      column,
       "Board column updated successfully",
     ).send(res);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
 export const deleteBoardColumn = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.user!;
+    const { userId, orgId } = getWorkspaceUser(req);
     const { projectId, columnId } = req.validated!.params as BoardColumnParams;
+    const body = (req.validated!.body ?? {}) as DeleteBoardColumnBody;
 
-    const memberAccess = await getProjectMembership(userId, projectId);
-
-    if (memberAccess?.role !== "ADMIN") {
-      return new ApiResponse(
-        403,
-        null,
-        "Only project admins can delete board columns",
-      ).send(res);
-    }
-
-    const column = await prisma.boardColumn.findUnique({
-      where: { id: columnId, projectId },
-      select: { name: true, _count: { select: { tickets: true } } },
-    });
-
-    if (!column) {
-      return new ApiResponse(404, null, "Column not found").send(res);
-    }
-
-    if (column.name.toLowerCase() === "backlog") {
-      return new ApiResponse(
-        400,
-        null,
-        '"Backlog" column cannot be deleted',
-      ).send(res);
-    }
-
-    if (column._count.tickets > 0) {
-      return new ApiResponse(
-        400,
-        null,
-        `Move the ${column._count.tickets} ticket(s) out of this column before deleting it`,
-      ).send(res);
-    }
-
-    await prisma.boardColumn.delete({ where: { id: columnId, projectId } });
-
-    return new ApiResponse(200, null, "Board column deleted successfully").send(
-      res,
+    const result = await deleteProjectBoardColumn(
+      orgId,
+      userId,
+      projectId,
+      columnId,
+      {
+        ticketDisposition: body.ticketDisposition,
+        targetColumnId: body.targetColumnId,
+      },
     );
+
+    return new ApiResponse(
+      200,
+      result,
+      "Board column deleted successfully",
+    ).send(res);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return new ApiResponse(error.statusCode, null, error.message).send(res);
+    }
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

@@ -1,4 +1,16 @@
+export type WorkspacePage =
+  | "board"
+  | "backlog"
+  | "inbox"
+  | "assistant"
+  | "members"
+  | "settings";
+
 export type AiAction =
+  | {
+      type: "navigate_page";
+      page: WorkspacePage;
+    }
   | {
       type: "navigate_board";
       filters: {
@@ -62,6 +74,17 @@ export type AiAction =
       columnName: string;
       moved: { ticketKey: string; title: string }[];
       skipped: { ticketKey: string; reason: string }[];
+    }
+  | {
+      type: "create_board_column";
+      column: { id: string; name: string; color: string | null };
+      alreadyExisted: boolean;
+    }
+  | {
+      type: "delete_board_column";
+      column: { name: string };
+      ticketsAffected: number;
+      restoredDefaultColumns: boolean;
     };
 
 export type AiChatResponse = {

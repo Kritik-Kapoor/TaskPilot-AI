@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { BoardColumnData } from "../hooks/useBoardPage";
 import TicketCard from "./TicketCard";
+import BoardMinimalSetupPanel from "./BoardMinimalSetupPanel";
 
 type DndHandlers = {
   onDragStart: () => void;
@@ -22,6 +23,9 @@ type BoardColumnsProps = {
   isLoading?: boolean;
   isFetching?: boolean;
   dragDisabled?: boolean;
+  isMinimalBoard?: boolean;
+  onOpenConfiguration?: () => void;
+  onOpenAssistant?: () => void;
 };
 
 function DroppableColumn({
@@ -97,6 +101,9 @@ const BoardColumns = ({
   isLoading,
   isFetching,
   dragDisabled,
+  isMinimalBoard,
+  onOpenConfiguration,
+  onOpenAssistant,
 }: BoardColumnsProps) => {
   if (isLoading) {
     return (
@@ -114,6 +121,19 @@ const BoardColumns = ({
     );
   }
 
+  const columnList = (
+    <>
+      {columns.map((column) => (
+        <DroppableColumn
+          key={column.id}
+          column={column}
+          dragDisabled={dragDisabled}
+          onAddTicket={onAddTicket}
+        />
+      ))}
+    </>
+  );
+
   return (
     <DragDropProvider
       onDragStart={dndHandlers.onDragStart}
@@ -122,20 +142,26 @@ const BoardColumns = ({
     >
       <div
         className={cn(
-          "min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden transition-opacity duration-150",
+          "min-h-0 min-w-0 flex-1 transition-opacity duration-150",
+          isMinimalBoard
+            ? "flex overflow-hidden"
+            : "overflow-x-auto overflow-y-hidden",
           isFetching && "opacity-60",
         )}
       >
-        <div className="flex h-full min-w-max gap-4 py-4 pr-2">
-          {columns.map((column) => (
-            <DroppableColumn
-              key={column.id}
-              column={column}
-              dragDisabled={dragDisabled}
-              onAddTicket={onAddTicket}
+        {isMinimalBoard && onOpenConfiguration && onOpenAssistant ? (
+          <div className="flex h-full min-w-0 flex-1 gap-4 py-4 pr-2">
+            <div className="flex h-full w-80 shrink-0">{columnList}</div>
+            <BoardMinimalSetupPanel
+              onOpenConfiguration={onOpenConfiguration}
+              onOpenAssistant={onOpenAssistant}
             />
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="flex h-full min-w-max gap-4 py-4 pr-2">
+            {columnList}
+          </div>
+        )}
       </div>
     </DragDropProvider>
   );

@@ -75,9 +75,17 @@ export function AiChatProvider({
             types.has("assign_tickets") ||
             types.has("apply_labels") ||
             types.has("remove_labels") ||
-            types.has("move_tickets")
+            types.has("move_tickets") ||
+            types.has("create_board_column") ||
+            types.has("delete_board_column")
           ) {
             queryClient.invalidateQueries({ queryKey: ["project-board"] });
+          }
+          if (
+            types.has("create_board_column") ||
+            types.has("delete_board_column")
+          ) {
+            queryClient.invalidateQueries({ queryKey: ["project-columns"] });
           }
           if (
             types.has("create_label") ||
@@ -89,15 +97,17 @@ export function AiChatProvider({
           }
 
           const uiAction =
+            actions.find((action) => action.type === "navigate_page") ??
             actions.find((action) => action.type === "navigate_board") ??
             actions.find((action) => action.type === "open_config") ??
             actions.find((action) => action.type === "create_issue_type") ??
+            actions.find((action) => action.type === "create_board_column") ??
             actions.find((action) => action.type === "create_ticket") ??
             actions.find((action) => action.type === "create_label") ??
             actions.find((action) => action.type === "move_tickets") ??
-            actions[0];
+            null;
 
-          setPendingAction(uiAction);
+          if (uiAction) setPendingAction(uiAction);
         }
       } catch (error) {
         const errorMsg: AiMessage = {

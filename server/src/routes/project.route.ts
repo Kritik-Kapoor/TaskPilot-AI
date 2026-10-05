@@ -29,6 +29,7 @@ import { validate } from "../middlewares/validateSchema.middleware.js";
 import {
   boardColumnParamsSchema,
   boardColumnBodySchema,
+  deleteBoardColumnBodySchema,
   createIssueTypeBodySchema,
   createLabelBodySchema,
   createProjectSchema,
@@ -139,6 +140,7 @@ router.patch(
 router.delete(
   "/:projectId/board-columns/:columnId",
   validate(boardColumnParamsSchema, "params"),
+  validate(deleteBoardColumnBodySchema),
   deleteBoardColumn,
 );
 

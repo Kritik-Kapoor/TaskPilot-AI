@@ -1,6 +1,11 @@
 import { apiFetch } from "@/lib/utils/apiClient";
 import type { BoardColumn } from "@/features/(workspace)/board/types";
-import type { LabelConfiguration, LabelPayload, TicketType } from "./types";
+import type {
+  DeleteBoardColumnPayload,
+  LabelConfiguration,
+  LabelPayload,
+  TicketType,
+} from "./types";
 
 export const ticketTypesQueryKey = (projectId: string) =>
   ["ticket-types", projectId] as const;
@@ -82,11 +87,19 @@ export const updateBoardColumn = (
     fallbackErrorMessage: "Failed to update board column",
   });
 
-export const deleteBoardColumn = (projectId: string, columnId: string) =>
-  apiFetch<null>(`/project/${projectId}/board-columns/${columnId}`, {
-    method: "DELETE",
-    fallbackErrorMessage: "Failed to delete board column",
-  });
+export const deleteBoardColumn = (
+  projectId: string,
+  columnId: string,
+  payload?: DeleteBoardColumnPayload,
+) =>
+  apiFetch<{ restoredDefaultColumns?: boolean }>(
+    `/project/${projectId}/board-columns/${columnId}`,
+    {
+      method: "DELETE",
+      body: payload ?? {},
+      fallbackErrorMessage: "Failed to delete board column",
+    },
+  );
 
 export const moveBoardColumn = (
   projectId: string,

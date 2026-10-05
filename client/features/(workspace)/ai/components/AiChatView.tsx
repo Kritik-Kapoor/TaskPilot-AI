@@ -26,6 +26,22 @@ const SUGGESTIONS = [
 
 function ActionBadge({ action }: { action: AiAction }) {
   switch (action.type) {
+    case "navigate_page": {
+      const labels: Record<string, string> = {
+        board: "Board",
+        backlog: "Backlog",
+        inbox: "Inbox",
+        assistant: "Assistant",
+        members: "Members",
+        settings: "Settings",
+      };
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand">
+          <ExternalLink className="h-3 w-3" />
+          Opened {labels[action.page] ?? action.page}
+        </span>
+      );
+    }
     case "navigate_board":
       return (
         <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-brand/10 px-2 py-1 text-[11px] font-medium text-brand">
@@ -57,6 +73,22 @@ function ActionBadge({ action }: { action: AiAction }) {
           {action.alreadyExisted
             ? `Label: ${action.label.name}`
             : `Created: ${action.label.name}`}
+        </span>
+      );
+    case "create_board_column":
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-600">
+          <SquareKanban className="h-3 w-3" />
+          {action.alreadyExisted
+            ? `Column: ${action.column.name}`
+            : `Created: ${action.column.name}`}
+        </span>
+      );
+    case "delete_board_column":
+      return (
+        <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-600">
+          <SquareKanban className="h-3 w-3" />
+          Deleted: {action.column.name}
         </span>
       );
     case "apply_labels": {
@@ -152,7 +184,10 @@ function ChatMessage({ msg }: { msg: AiMessage }) {
         {msg.actions && msg.actions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {msg.actions.map((action, index) => (
-              <ActionBadge key={`${msg.id}-${action.type}-${index}`} action={action} />
+              <ActionBadge
+                key={`${msg.id}-${action.type}-${index}`}
+                action={action}
+              />
             ))}
           </div>
         )}

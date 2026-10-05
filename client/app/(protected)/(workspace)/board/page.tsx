@@ -8,11 +8,17 @@ import useBoardPage from "@/features/(workspace)/board/hooks/useBoardPage";
 import { useAiChat } from "@/features/(workspace)/ai/AiChatProvider";
 import { formatDisplayName } from "@/lib/utils/common";
 import { ChevronRight } from "lucide-react";
+import { useProject } from "@/providers/projectProvider";
+import { useWorkspaceUi } from "@/providers/workspaceUiProvider";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 const BoardPage = () => {
   const { state, actions } = useBoardPage();
   const { pendingAction, consumeAction } = useAiChat();
+  const { buildWorkspacePath } = useProject();
+  const { openConfiguration } = useWorkspaceUi();
+  const router = useRouter();
   const appliedRef = useRef(false);
 
   useEffect(() => {
@@ -60,6 +66,9 @@ const BoardPage = () => {
           isLoading={state.isBoardLoading}
           isFetching={state.isBoardFetching}
           dragDisabled={state.isFiltering}
+          isMinimalBoard={state.isMinimalBoard}
+          onOpenConfiguration={() => openConfiguration("statuses")}
+          onOpenAssistant={() => router.push(buildWorkspacePath("/assistant"))}
         />
       </div>
 

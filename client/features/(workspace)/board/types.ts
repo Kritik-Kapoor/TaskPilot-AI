@@ -50,6 +50,7 @@ export type ProjectBoardResponse = {
   columns: ApiColumnWithTickets[];
   totalTicketCount: number;
   filteredTicketCount: number;
+  isMinimalBoard?: boolean;
 };
 
 export type BoardFilters = {

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import type { AiAction } from "@/features/(workspace)/ai/types";
+import { useWorkspaceUi } from "@/providers/workspaceUiProvider";
 import ProjectSwitcher from "@/components/common/ProjectSwitcher";
 import { useProject } from "@/providers/projectProvider";
 import { useAiChat } from "@/features/(workspace)/ai/AiChatProvider";
@@ -31,8 +32,6 @@ import {
 } from "lucide-react";
 import { CONFIGURATION_SECTIONS } from "@/features/(workspace)/configuration/lib/constants";
 import { ProjectConfigurationDialog } from "@/features/(workspace)/configuration/components";
-import type { ConfigurationSection } from "@/features/(workspace)/configuration/types";
-
 const WORKSPACE_NAV = [
   { title: "Board", href: "/board", icon: SquareKanban },
   { title: "Backlog", href: "/backlog", icon: List },
@@ -44,6 +43,15 @@ const WORKSPACE_NAV = [
 const PROJECT_ADMIN_NAV = [
   { title: "Settings", href: "/settings", icon: Settings },
 ] as const;
+
+const WORKSPACE_PAGE_PATH = {
+  board: "/board",
+  backlog: "/backlog",
+  inbox: "/inbox",
+  assistant: "/assistant",
+  members: "/members",
+  settings: "/settings",
+} as const;
 
 const isBoardNavAction = (action: AiAction) =>
   action.type === "navigate_board" ||
@@ -62,10 +70,13 @@ export function AppSidebar() {
   const router = useRouter();
   const { isProjectAdmin, buildWorkspacePath, projectRole } = useProject();
   const { pendingAction, consumeAction } = useAiChat();
-
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [configSection, setConfigSection] =
-    useState<ConfigurationSection>("labels");
+  const {
+    isConfigOpen,
+    configSection,
+    openConfiguration,
+    closeConfiguration,
+    setConfigSection,
+  } = useWorkspaceUi();
   const boardNavInitiatedRef = useRef<AiAction | null>(null);
 
   const canManageLabels = projectRole !== "VIEWER";
@@ -81,17 +92,26 @@ export function AppSidebar() {
       return;
     }
 
+    if (pendingAction.type === "navigate_page") {
+      const path = WORKSPACE_PAGE_PATH[pendingAction.page];
+      router.push(buildWorkspacePath(path));
+      consumeAction();
+      return;
+    }
+
     if (pendingAction.type === "open_config") {
-      setConfigSection(pendingAction.tab);
-      setIsConfigOpen(true);
+      openConfiguration(pendingAction.tab);
       consumeAction();
     } else if (pendingAction.type === "create_issue_type") {
-      setConfigSection("types");
-      setIsConfigOpen(true);
+      openConfiguration("types");
       consumeAction();
     } else if (pendingAction.type === "create_label") {
-      setConfigSection("labels");
-      setIsConfigOpen(true);
+      openConfiguration("labels");
+      consumeAction();
+    } else if (pendingAction.type === "create_board_column") {
+      openConfiguration("statuses");
+      consumeAction();
+    } else if (pendingAction.type === "delete_board_column") {
       consumeAction();
     } else if (isBoardNavAction(pendingAction)) {
       const boardPath = buildWorkspacePath("/board");
@@ -111,7 +131,14 @@ export function AppSidebar() {
 
       if (!isBoardPageConsumesAction(pendingAction)) consumeAction();
     }
-  }, [pendingAction, consumeAction, pathname, router, buildWorkspacePath]);
+  }, [
+    pendingAction,
+    consumeAction,
+    pathname,
+    router,
+    buildWorkspacePath,
+    openConfiguration,
+  ]);
 
   return (
     <>
@@ -144,7 +171,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     isActive={isConfigOpen}
                     tooltip="Configuration"
-                    onClick={() => setIsConfigOpen(true)}
+                    onClick={() => openConfiguration()}
                   >
                     <SlidersHorizontal />
                     <span>Configuration</span>
@@ -185,7 +212,9 @@ export function AppSidebar() {
 
       <ProjectConfigurationDialog
         open={isConfigOpen}
-        onOpenChange={setIsConfigOpen}
+        onOpenChange={(open) =>
+          open ? openConfiguration() : closeConfiguration()
+        }
         section={configSection}
         onSectionChange={setConfigSection}
         activeSectionTitle={activeSection.title}

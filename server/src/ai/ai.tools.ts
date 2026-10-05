@@ -1,6 +1,7 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions.js";
 
 export const MAX_ASSIGNMENTS_PER_REQUEST = 10;
+export const MAX_BATCH_CREATE_ITEMS = 10;
 
 const ticketSelectorProperties = {
   ticketKeys: {
@@ -46,7 +47,40 @@ const ticketSelectorProperties = {
   },
 } as const;
 
+export const WORKSPACE_PAGES = [
+  "board",
+  "backlog",
+  "inbox",
+  "assistant",
+  "members",
+  "settings",
+] as const;
+
 export const aiTools: ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "navigate_workspace",
+      description:
+        "Navigate the user to a main workspace page. Use when they ask to go to, open, or be taken to " +
+        "Backlog, Inbox, Assistant/AI chat, Members, Settings, or the Board (without ticket filters). " +
+        "Examples: 'take me to backlog', 'open members page', 'where is settings'. " +
+        "Do NOT use this to filter tickets — use filter_board when they want to find or show specific tickets.",
+      parameters: {
+        type: "object",
+        properties: {
+          page: {
+            type: "string",
+            enum: [...WORKSPACE_PAGES],
+            description:
+              "Target page: board, backlog, inbox, assistant (AI chat), members, or settings.",
+          },
+        },
+        required: ["page"],
+        additionalProperties: false,
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -102,23 +136,37 @@ export const aiTools: ChatCompletionTool[] = [
     function: {
       name: "create_issue_type",
       description:
-        "Create a new issue type for the current project. " +
-        "Use when the user asks to add a new type like 'epic', 'spike', etc.",
+        "Create one or more issue types for the current project. " +
+        "Use when the user asks to add types like 'epic', 'spike', etc. " +
+        "Pass every type in the issueTypes array (one object per type).",
       parameters: {
         type: "object",
         properties: {
-          key: {
-            type: "string",
-            description: "The name/key for the new issue type (e.g. 'epic').",
-          },
-          color: {
-            type: "string",
+          issueTypes: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_BATCH_CREATE_ITEMS,
+            items: {
+              type: "object",
+              properties: {
+                key: {
+                  type: "string",
+                  description: "The name/key for the issue type (e.g. 'epic').",
+                },
+                color: {
+                  type: "string",
+                  description:
+                    "Hex color (e.g. '#6366f1'). Pick one if not specified.",
+                },
+              },
+              required: ["key", "color"],
+              additionalProperties: false,
+            },
             description:
-              "Hex color for the issue type (e.g. '#6366f1'). " +
-              "Pick a reasonable color if the user doesn't specify one.",
+              "All issue types to create in this call, e.g. [{ key: 'epic', color: '#6366f1' }, …].",
           },
         },
-        required: ["key", "color"],
+        required: ["issueTypes"],
         additionalProperties: false,
       },
     },
@@ -171,23 +219,159 @@ export const aiTools: ChatCompletionTool[] = [
     function: {
       name: "create_label",
       description:
-        "Create a new label in the current project. " +
-        "Use when the user asks to add or create a label. If they also want it on specific tickets, " +
+        "Create one or more labels in the current project. " +
+        "Use when the user asks to add or create labels. If they also want labels on tickets, " +
         "call this first and then call apply_labels.",
       parameters: {
         type: "object",
         properties: {
-          name: {
-            type: "string",
-            description: "Label name (e.g. 'frontend'). Stored lowercase.",
-          },
-          color: {
-            type: "string",
+          labels: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_BATCH_CREATE_ITEMS,
+            items: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description:
+                    "Label name (e.g. 'frontend'). Stored lowercase.",
+                },
+                color: {
+                  type: "string",
+                  description:
+                    "Hex color (e.g. '#6366f1'). Pick one if not specified.",
+                },
+              },
+              required: ["name"],
+              additionalProperties: false,
+            },
             description:
-              "Hex color for the label (e.g. '#6366f1'). Pick one if the user doesn't specify.",
+              "Every label to create in this call, e.g. [{ name: 'frontend' }, { name: 'backend' }].",
           },
         },
-        required: ["name"],
+        required: ["labels"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_board_columns",
+      description:
+        "Create one or more board columns (statuses/stages) on the project board. " +
+        "Use when the user asks to add columns like 'QA', 'Staging', or multiple stages at once. " +
+        "Columns are appended at the end of the board.",
+      parameters: {
+        type: "object",
+        properties: {
+          columns: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_BATCH_CREATE_ITEMS,
+            items: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description:
+                    "Column name as shown on the board (e.g. 'QA', 'In Review').",
+                },
+                color: {
+                  type: "string",
+                  description:
+                    "Hex color (e.g. '#6366f1'). Pick one if not specified.",
+                },
+              },
+              required: ["name"],
+              additionalProperties: false,
+            },
+            description:
+              "All columns to create, e.g. [{ name: 'QA' }, { name: 'Staging' }].",
+          },
+        },
+        required: ["columns"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_board_columns",
+      description:
+        "Delete one or more board columns (statuses/stages) from the project. " +
+        "Use when the user asks to remove or delete a column like Done, In Progress, or QA — " +
+        "NOT for labels (use delete_project_label only for tag/label definitions). " +
+        "The Backlog column cannot be deleted. If a column still has tickets, ticketDisposition and " +
+        "(when moving) moveToColumnName are required — ask the user first if they did not say.",
+      parameters: {
+        type: "object",
+        properties: {
+          columns: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_BATCH_CREATE_ITEMS,
+            items: {
+              type: "object",
+              properties: {
+                columnName: {
+                  type: "string",
+                  description:
+                    "Board column name to delete, e.g. 'Done', 'In Progress'.",
+                },
+                ticketDisposition: {
+                  type: "string",
+                  enum: ["move", "delete_all"],
+                  description:
+                    "Required when the column has tickets. 'move' sends tickets elsewhere; " +
+                    "'delete_all' deletes those tickets with the column.",
+                },
+                moveToColumnName: {
+                  type: "string",
+                  description:
+                    "Required when ticketDisposition is 'move'. Column that should receive the tickets.",
+                },
+              },
+              required: ["columnName"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["columns"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_board_column",
+      description:
+        "Delete one board column (stage/status) by name. " +
+        "Use for requests like 'delete the Done column', 'remove In Progress stage'. " +
+        "Never use delete_project_label for this. Backlog cannot be deleted.",
+      parameters: {
+        type: "object",
+        properties: {
+          columnName: {
+            type: "string",
+            description: "Board column to delete, e.g. 'Done', 'Todo', 'In Progress'.",
+          },
+          ticketDisposition: {
+            type: "string",
+            enum: ["move", "delete_all"],
+            description:
+              "Required when that column still has tickets — ask the user if unclear.",
+          },
+          moveToColumnName: {
+            type: "string",
+            description:
+              "Required when ticketDisposition is 'move'. Target column for those tickets.",
+          },
+        },
+        required: ["columnName"],
         additionalProperties: false,
       },
     },
@@ -240,16 +424,16 @@ export const aiTools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "delete_label",
+      name: "delete_project_label",
       description:
-        "Delete a label from the project entirely. It is removed from every ticket that had it. " +
-        "Use when the user asks to delete or remove a label definition (not just from one ticket).",
+        "Delete a label (tag) from the project — e.g. 'frontend', 'bug'. " +
+        "NOT for board columns/stages (Done, Todo, In Progress): use delete_board_column instead.",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Label name to delete, e.g. 'frontend'.",
+            description: "Label/tag name only, e.g. frontend or backend.",
           },
         },
         required: ["name"],
@@ -329,7 +513,8 @@ export const aiTools: ChatCompletionTool[] = [
       name: "open_configuration",
       description:
         "Open the project configuration dialog on a specific tab. " +
-        "Use when the user asks to see or manage labels, statuses, or issue types settings.",
+        "Use when the user asks to open settings/configuration UI. " +
+        "Do NOT use for remove/delete column requests — use delete_board_column instead.",
       parameters: {
         type: "object",
         properties: {

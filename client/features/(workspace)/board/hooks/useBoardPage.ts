@@ -18,6 +18,7 @@ import {
   getProjectBoard,
   projectBoardQueryKey,
   projectBoardQueryPrefix,
+  projectColumnsQueryKey,
   repositionTicket,
 } from "../api";
 import {
@@ -227,6 +228,9 @@ const useBoardPage = () => {
       queryClient.invalidateQueries({
         queryKey: projectBoardQueryPrefix(projectId),
       });
+      queryClient.invalidateQueries({
+        queryKey: projectColumnsQueryKey(projectId),
+      });
     },
   });
 
@@ -258,6 +262,9 @@ const useBoardPage = () => {
     onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: projectBoardQueryPrefix(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: projectColumnsQueryKey(projectId),
       });
     },
   });
@@ -405,6 +412,7 @@ const useBoardPage = () => {
       isBoardLoading,
       isBoardFetching,
       isBoardError,
+      isMinimalBoard: boardData?.isMinimalBoard ?? false,
     },
     actions: {
       clearFilters,

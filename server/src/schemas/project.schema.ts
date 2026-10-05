@@ -155,6 +155,16 @@ export const reorderBoardColumnsBodySchema = z.object({
   newPosition: z.number().int("Position must be an integer"),
 });
 
+export const deleteBoardColumnBodySchema = z.preprocess(
+  (value) => (value === undefined || value === null ? {} : value),
+  z.object({
+    ticketDisposition: z.enum(["move", "delete_all"]).optional(),
+    targetColumnId: z.uuid("Invalid target column ID").optional(),
+  }),
+);
+
+export type DeleteBoardColumnBody = z.infer<typeof deleteBoardColumnBodySchema>;
+
 export type ReorderBoardColumnsBody = z.infer<
   typeof reorderBoardColumnsBodySchema
 >;

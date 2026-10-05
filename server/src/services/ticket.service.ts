@@ -16,6 +16,7 @@ import {
   TICKET_POSITION_GAP,
 } from "../utils/ticketPosition.utils.js";
 import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
+import { ensureDefaultWorkflowColumns } from "./boardColumn.service.js";
 import { Prisma } from "../generated/prisma/client.js";
 import {
   resolveTicketsForBulkSelector,
@@ -393,6 +394,8 @@ export const getProjectTickets = async (
 ) => {
   await assertProjectAccess(userId, orgId, projectId);
 
+  await ensureDefaultWorkflowColumns(projectId);
+
   const ticketFilter = buildBoardTicketWhere(filters);
 
   const [columns, totalTicketCount, filteredTicketCount] = await Promise.all([
@@ -422,7 +425,9 @@ export const getProjectTickets = async (
     }),
   ]);
 
-  return { columns, totalTicketCount, filteredTicketCount };
+  const isMinimalBoard = columns.length === 1;
+
+  return { columns, totalTicketCount, filteredTicketCount, isMinimalBoard };
 };
 
 const columnSelect = {
@@ -442,10 +447,18 @@ export const getProjectColumns = async (
   const columns = await prisma.boardColumn.findMany({
     where: { projectId },
     orderBy: { position: "asc" },
-    select: columnSelect,
+    select: {
+      ...columnSelect,
+      _count: { select: { tickets: true } },
+    },
   });
 
-  return { columns };
+  return {
+    columns: columns.map(({ _count, ...column }) => ({
+      ...column,
+      ticketCount: _count.tickets,
+    })),
+  };
 };
 
 const findBacklogColumn = (projectId: string) =>

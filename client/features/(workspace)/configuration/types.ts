@@ -18,3 +18,8 @@ export type LabelPayload = {
 export type LabelConfiguration = Omit<ProjectLabel, "ticketCount"> & {
   ticketCount: number;
 };
+
+export type DeleteBoardColumnPayload = {
+  ticketDisposition?: "move" | "delete_all";
+  targetColumnId?: string;
+};

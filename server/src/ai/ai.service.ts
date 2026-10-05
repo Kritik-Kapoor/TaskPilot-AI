@@ -7,12 +7,15 @@ import { aiTools } from "./ai.tools.js";
 import {
   executeApplyLabels,
   executeAssignTickets,
-  executeCreateIssueType,
-  executeCreateLabel,
+  executeCreateBoardColumns,
+  executeDeleteBoardColumns,
+  executeCreateIssueTypes,
+  executeCreateLabels,
   executeCreateTicket,
   executeDeleteLabel,
   executeFilterBoard,
   executeMoveTickets,
+  executeNavigateWorkspace,
   executeOpenConfig,
   executeRemoveLabels,
 } from "./ai.tool-executor.js";
@@ -34,11 +37,13 @@ like "today", "yesterday", or "last 3 days" into absolute YYYY-MM-DD values befo
 You can help users:
 - Filter and find tickets on the board
 - Create new tickets
-- Create new issue types
+- Create new issue types (several at once in one tool call)
+- Create labels or board columns/stages (several at once in one tool call)
 - Create, apply, remove, or delete labels on tickets
 - Assign or re-assign tickets to project members (including bulk: all tickets, by label, by date, unassigned only)
 - Move tickets to board columns
 - Open configuration pages
+- Navigate to workspace pages (backlog, inbox, assistant, members, settings)
 
 When the user asks for several things in one message, call every matching tool in that same turn.
 Independent tasks can be called together. Example:
@@ -49,17 +54,25 @@ If a later task needs a result you do not have yet (for example assigning a tick
 call the first tool now. You will get the ticket key back and can call the next tool after that.
 Do not invent ticket keys for tickets you have not created.
 
-When the user asks to see or find tickets, use filter_board.
+When the user asks to go to a workspace area (backlog, inbox, assistant, members, settings, or board without filters),
+use navigate_workspace. When the user asks to see or find tickets, use filter_board.
 When the user asks to create a ticket, use create_ticket. If they also say who it should go to, pass "assignee".
-When the user asks to add a new issue type, use create_issue_type.
-When the user asks to create a label, use create_label.
+When the user asks to add issue types, use create_issue_type with every type in issueTypes
+(even a single type — use a one-item array). Same for create_label (labels array) and
+create_board_columns (columns array) when they ask for board stages/statuses/columns.
+delete_board_column when they ask to remove OR delete a board column/stage (e.g. "remove Done column", "delete Done column").
+Never use open_configuration for remove/delete column requests — perform delete_board_column instead.
+Do NOT use delete_project_label for column names like Done, Todo, or In Progress — those are board columns, not labels.
+If they list several labels, types, or columns in one message, put them all in one tool call.
 When the user asks to add or attach labels to tickets, use apply_labels (set allTickets: true for "all tickets").
-When the user asks to remove labels from tickets, use remove_labels. When they ask to delete a label from the project, use delete_label.
+When the user asks to remove labels from tickets, use remove_labels. When they ask to delete a label/tag from the project, use delete_label.
+When deleting a board column that still has tickets, do NOT call delete_board_columns until the user chooses: move tickets (ticketDisposition "move" + moveToColumnName) or delete tickets with the column ("delete_all").
 When the user asks to move tickets to a column/status, use move_tickets with the column name from the board.
 When the user asks to assign, re-assign, take, or give a ticket to someone, use assign_tickets —
 always use this single tool regardless of whether the ticket(s) are currently assigned or not;
 the server figures out per-ticket whether it's an assign or a re-assign.
-When the user asks about configuration/settings for labels/statuses/types, use open_configuration.
+When the user asks to open or go to configuration/settings UI for labels/statuses/types, use open_configuration.
+Do not use open_configuration as a substitute for deleting a column.
 
 For assignee filters, pass an "assignees" array — one entry per person:
 - "current_user" when they mean themselves (me, my tickets)
@@ -82,7 +95,11 @@ doesn't say which tickets, ask them to clarify rather than guessing.
 
 Keep text responses brief and friendly. Always use a tool when the user's intent matches one.
 If you cannot determine the user's intent, ask a clarifying question, do NOT make assumptions.
-After tools have finished, only call more tools if part of the user's request is still undone.`;
+After tools have finished, only call more tools if part of the user's request is still undone.
+
+Examples:
+- "Delete Done column" or "Remove Done column" → delete_board_column with columnName "Done".
+- "Open column settings" → open_configuration tab statuses. Never delete_label for Done/Todo/In Progress.`;
 };
 
 type ProcessInput = {
@@ -190,6 +207,36 @@ async function executeOneTool(
   ctx: ToolContext,
 ): Promise<ToolOutcome> {
   switch (name) {
+    case "navigate_workspace": {
+      const action = executeNavigateWorkspace(
+        args as {
+          page:
+            | "board"
+            | "backlog"
+            | "inbox"
+            | "assistant"
+            | "members"
+            | "settings";
+        },
+      );
+      const pageLabels: Record<string, string> = {
+        board: "Board",
+        backlog: "Backlog",
+        inbox: "Inbox",
+        assistant: "Assistant",
+        members: "Members",
+        settings: "Settings",
+      };
+      return {
+        actions: [action],
+        text: `Opening ${pageLabels[action.page] ?? action.page}…`,
+        applied: 1,
+        skipped: 0,
+        failed: false,
+        toolResult: { ok: true, page: action.page },
+      };
+    }
+
     case "filter_board": {
       const action = (await executeFilterBoard(args as never, ctx)) as Extract<
         AiAction,
@@ -236,17 +283,27 @@ async function executeOneTool(
     }
 
     case "create_issue_type": {
-      const action = (await executeCreateIssueType(
+      const { actions, errors } = await executeCreateIssueTypes(
         args as never,
         ctx,
-      )) as Extract<AiAction, { type: "create_issue_type" }>;
+      );
+      const parts = actions.map(
+        (action) => `Created issue type "${action.issueType.key}"`,
+      );
+      if (errors.length > 0) parts.push(...errors);
+
       return {
-        actions: [action],
-        text: `Created issue type "${args.key}"`,
-        applied: 1,
-        skipped: 0,
-        failed: false,
-        toolResult: { ok: true, issueType: action.issueType },
+        actions,
+        text:
+          parts.length > 0 ? parts.join("; ") : "No issue types were created",
+        applied: actions.length,
+        skipped: errors.length,
+        failed: errors.length > 0 && actions.length === 0,
+        toolResult: {
+          ok: actions.length > 0,
+          issueTypes: actions.map((action) => action.issueType),
+          errors,
+        },
       };
     }
 
@@ -283,22 +340,89 @@ async function executeOneTool(
     }
 
     case "create_label": {
-      const action = (await executeCreateLabel(args as never, ctx)) as Extract<
-        AiAction,
-        { type: "create_label" }
-      >;
-      return {
-        actions: [action],
-        text: action.alreadyExisted
+      const { actions, errors } = await executeCreateLabels(args as never, ctx);
+      const parts = actions.map((action) =>
+        action.alreadyExisted
           ? `Label "${action.label.name}" already exists`
           : `Created label "${action.label.name}"`,
-        applied: action.alreadyExisted ? 0 : 1,
-        skipped: 0,
-        failed: false,
+      );
+      if (errors.length > 0) parts.push(...errors);
+
+      const applied = actions.filter((action) => !action.alreadyExisted).length;
+
+      return {
+        actions,
+        text: parts.length > 0 ? parts.join("; ") : "No labels were created",
+        applied,
+        skipped: errors.length,
+        failed: errors.length > 0 && actions.length === 0,
         toolResult: {
-          ok: true,
-          name: action.label.name,
-          alreadyExisted: action.alreadyExisted,
+          ok: actions.length > 0,
+          labels: actions.map((action) => ({
+            name: action.label.name,
+            alreadyExisted: action.alreadyExisted,
+          })),
+          errors,
+        },
+      };
+    }
+
+    case "delete_board_column":
+    case "delete_board_columns": {
+      const { actions, errors } = await executeDeleteBoardColumns(
+        args as never,
+        ctx,
+      );
+      const parts = actions.map((action) => {
+        const base = `Deleted column "${action.column.name}"`;
+        if (action.ticketsAffected > 0) {
+          return `${base} (${action.ticketsAffected} ticket${action.ticketsAffected === 1 ? "" : "s"} handled)`;
+        }
+        return base;
+      });
+      if (errors.length > 0) parts.push(...errors);
+
+      return {
+        actions,
+        text: parts.length > 0 ? parts.join("; ") : "No columns were deleted",
+        applied: actions.length,
+        skipped: errors.length,
+        failed: errors.length > 0 && actions.length === 0,
+        toolResult: {
+          ok: actions.length > 0,
+          deleted: actions.map((a) => a.column.name),
+          errors,
+        },
+      };
+    }
+
+    case "create_board_columns": {
+      const { actions, errors } = await executeCreateBoardColumns(
+        args as never,
+        ctx,
+      );
+      const parts = actions.map((action) =>
+        action.alreadyExisted
+          ? `Column "${action.column.name}" already exists`
+          : `Created column "${action.column.name}"`,
+      );
+      if (errors.length > 0) parts.push(...errors);
+
+      const applied = actions.filter((action) => !action.alreadyExisted).length;
+
+      return {
+        actions,
+        text: parts.length > 0 ? parts.join("; ") : "No columns were created",
+        applied,
+        skipped: errors.length,
+        failed: errors.length > 0 && actions.length === 0,
+        toolResult: {
+          ok: actions.length > 0,
+          columns: actions.map((action) => ({
+            name: action.column.name,
+            alreadyExisted: action.alreadyExisted,
+          })),
+          errors,
         },
       };
     }
@@ -392,10 +516,10 @@ async function executeOneTool(
     }
 
     case "assign_tickets": {
-      const action = (await executeAssignTickets(args as never, ctx)) as Extract<
-        AiAction,
-        { type: "assign_tickets" }
-      >;
+      const action = (await executeAssignTickets(
+        args as never,
+        ctx,
+      )) as Extract<AiAction, { type: "assign_tickets" }>;
       const formatted = formatAssignTicketsText(action);
       return {
         actions: [action],
@@ -498,7 +622,9 @@ const combineOutcomes = (outcomes: ToolOutcome[]) => {
   }
 
   if (failed === outcomes.length || (applied === 0 && skipped > 0)) {
-    return detail ? `No changes were made. ${detail}.` : "No changes were made.";
+    return detail
+      ? `No changes were made. ${detail}.`
+      : "No changes were made.";
   }
 
   if (failed > 0 || skipped > 0) {
@@ -527,7 +653,7 @@ export async function processAiChat(
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-6-luna",
       messages,
       tools: aiTools,
       tool_choice: "auto",
