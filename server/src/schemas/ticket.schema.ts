@@ -34,9 +34,8 @@ export const createTicketSchema = z
       .optional(),
     labels: z.array(z.string().trim().min(1)).max(8).optional(),
     position: z
-      .number()
-      .int("Position must be a whole number")
-      .positive("Position must be positive")
+      .string()
+      .regex(/^[a-z]+$/, "Position must be a valid rank string")
       .optional(),
   })
   .superRefine((data, ctx) => {
@@ -61,9 +60,8 @@ export const updateTicketSchema = z
   .object({
     columnId: z.uuid("Invalid column ID").optional(),
     position: z
-      .number()
-      .int("Position must be a whole number")
-      .positive("Position must be positive")
+      .string()
+      .regex(/^[a-z]+$/, "Position must be a valid rank string")
       .optional(),
     title: z
       .string()

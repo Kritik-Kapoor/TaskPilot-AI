@@ -16,6 +16,7 @@ import { deleteTicket, updateTicket } from "../../ticket/api";
 import { createBacklogTableColumns } from "../components/BacklogTableColumns";
 import type { ProjectBacklogResponse } from "../types";
 import { getProjectBacklog, projectBacklogQueryKey } from "../api";
+import { compareLexoRank } from "../../board/lib/utils/ticketPosition";
 
 const optimisticCreate = (
   old: ProjectBacklogResponse,
@@ -23,7 +24,9 @@ const optimisticCreate = (
 ): ProjectBacklogResponse => ({
   ...old,
   totalTicketCount: old.totalTicketCount + 1,
-  tickets: [...old.tickets, ticket].sort((a, b) => a.position - b.position),
+  tickets: [...old.tickets, ticket].sort((a, b) =>
+    compareLexoRank(a.position, b.position),
+  ),
 });
 
 const useBacklogPage = () => {

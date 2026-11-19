@@ -9,6 +9,8 @@ import Link from "next/link";
 import { PRIORITY_CLASS } from "../../board/lib/constants";
 import type { Ticket } from "../../board/types";
 
+const emptyCell = () => <span className="text-muted-foreground">NA</span>;
+
 export const createBacklogTableColumns = (
   getTicketHref: (ticketId: string) => string,
   options?: { enableSelection?: boolean },
@@ -78,7 +80,7 @@ export const createBacklogTableColumns = (
       maxSize: 100,
       cell: ({ row }) => {
         const issueType = row.original.issueType;
-        if (!issueType) return null;
+        if (!issueType) return emptyCell();
         return (
           <Badge
             variant="outline"
@@ -95,24 +97,26 @@ export const createBacklogTableColumns = (
       header: "Priority",
       size: 100,
       maxSize: 100,
-      cell: ({ row }) => (
-        <span
-          className={cn("font-medium", PRIORITY_CLASS[row.original.priority])}
-        >
-          {row.original.priority}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const priority = row.original.priority;
+        if (!priority) return emptyCell();
+        return (
+          <span className={cn("font-medium", PRIORITY_CLASS[priority])}>
+            {priority}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "storyPoints",
       header: "Pts",
       size: 50,
       maxSize: 50,
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">
-          {row.original.storyPoints ?? "—"}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const points = row.original.storyPoints;
+        if (points == null) return emptyCell();
+        return <span className="text-muted-foreground">{points}</span>;
+      },
     },
     {
       id: "assignee",
@@ -123,7 +127,7 @@ export const createBacklogTableColumns = (
         const assignee = row.original.assignee;
 
         if (!assignee) {
-          return <span className="text-muted-foreground">NA</span>;
+          return emptyCell();
         }
 
         return (

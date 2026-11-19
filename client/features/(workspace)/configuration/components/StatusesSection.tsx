@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import useStatusesSection from "@/features/(workspace)/configuration/hooks/useStatusesSection";
 import DeleteColumnDialog from "@/features/(workspace)/configuration/components/DeleteColumnDialog";
-import { getPositionBetween } from "@/features/(workspace)/board/lib/utils/ticketPosition";
+import { getPositionBetween } from "@/features/(workspace)/board/lib/utils/columnPosition";
 import { cn } from "@/lib/utils";
 import {
   type DragEndEvent,

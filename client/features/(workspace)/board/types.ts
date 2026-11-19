@@ -25,7 +25,7 @@ export type Ticket = {
   priority: TicketPriority;
   typeId: string | null;
   issueType: TicketIssueType | null;
-  position: number;
+  position: string;
   labels: ProjectLabel[];
   storyPoints: number | null;
   columnId: string;
@@ -75,7 +75,7 @@ export type CreateTicketPayload = {
 
 export type RepositionTicketPayload = {
   columnId: string;
-  position: number;
+  position: string;
 };
 
 const UUID_PATTERN =

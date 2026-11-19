@@ -34,6 +34,7 @@ import {
   type Ticket,
   type ProjectBoardResponse,
 } from "../types";
+import { compareLexoRank } from "../lib/utils/ticketPosition";
 
 export type BoardColumnData = {
   id: string;
@@ -96,8 +97,8 @@ const optimisticReposition = (
     ...old,
     columns: columnsWithout.map((col) => {
       if (col.id !== result.columnId) return col;
-      const tickets = [...col.tickets, updated].sort(
-        (a, b) => a.position - b.position,
+      const tickets = [...col.tickets, updated].sort((a, b) =>
+        compareLexoRank(a.position, b.position),
       );
       return { ...col, tickets };
     }),
@@ -114,8 +115,8 @@ const optimisticCreate = (
   filteredTicketCount: old.filteredTicketCount + 1,
   columns: old.columns.map((col) => {
     if (col.id !== columnId) return col;
-    const tickets = [...col.tickets, ticket].sort(
-      (a, b) => a.position - b.position,
+    const tickets = [...col.tickets, ticket].sort((a, b) =>
+      compareLexoRank(a.position, b.position),
     );
     return { ...col, tickets };
   }),

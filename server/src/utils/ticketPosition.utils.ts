@@ -1,21 +1,84 @@
-export const TICKET_POSITION_GAP = 1000;
+// LexoRank for ticket order (lowercase a–z, lexicographic sort).
+// null lo/hi = unbounded on that side; null return triggers column reindex.
 
-// Position ticket at the end
-export const getAppendPosition = (maxPosition: number | null) =>
-  (maxPosition ?? 0) + TICKET_POSITION_GAP;
+const FIRST_CODE = "a".charCodeAt(0);
+const LAST_CODE = "z".charCodeAt(0);
+const VIRT_LO = FIRST_CODE - 1;
+const VIRT_HI = LAST_CODE + 1;
 
-// Position ticket in between
-export const getPositionBetween = (
-  before: number | null,
-  after: number | null,
-): number | null => {
-  if (before === null && after === null) return TICKET_POSITION_GAP;
+export const INITIAL_LEXO_RANK = "n";
 
-  if (before === null) return after! <= 1 ? null : Math.floor(after! / 2);
+export const getLexoRankBetween = (
+  lo: string | null,
+  hi: string | null,
+): string | null => {
+  const loStr = lo ?? "";
+  const hiStr = hi ?? "";
 
-  if (after === null) return before + TICKET_POSITION_GAP;
+  let result = "";
+  let i = 0;
 
-  if (after - before <= 1) return null;
+  phase1: while (true) {
+    const lc = i < loStr.length ? loStr.charCodeAt(i) : VIRT_LO;
+    const hc = i < hiStr.length ? hiStr.charCodeAt(i) : VIRT_HI;
 
-  return Math.floor((before + after) / 2);
+    if (lc === hc) {
+      result += String.fromCharCode(lc);
+      i++;
+      continue;
+    }
+
+    const mid = Math.floor((lc + hc) / 2);
+
+    if (mid > lc) {
+      result += String.fromCharCode(mid);
+      return result;
+    }
+
+    if (lc < FIRST_CODE) return null;
+
+    result += String.fromCharCode(lc);
+    i++;
+    break phase1;
+  }
+
+  while (true) {
+    const lc = i < loStr.length ? loStr.charCodeAt(i) : VIRT_LO;
+    const mid = Math.floor((lc + VIRT_HI) / 2);
+
+    if (mid > lc) {
+      result += String.fromCharCode(mid);
+      return result;
+    }
+
+    result += String.fromCharCode(lc);
+    i++;
+  }
+};
+
+export const getAppendLexoRank = (maxRank: string | null): string => {
+  if (maxRank === null) return INITIAL_LEXO_RANK;
+  return getLexoRankBetween(maxRank, null) ?? maxRank + INITIAL_LEXO_RANK;
+};
+
+const REINDEX_TOTAL = 26 ** 4;
+
+const encodeBase26_4 = (val: number): string => {
+  const chars: string[] = [];
+  let rem = val;
+  for (let k = 0; k < 4; k++) {
+    chars.unshift(String.fromCharCode(FIRST_CODE + (rem % 26)));
+    rem = Math.floor(rem / 26);
+  }
+  return chars.join("");
+};
+
+export const generateReindexPositions = (count: number): string[] => {
+  if (count === 0) return [];
+  if (count === 1) return [`${INITIAL_LEXO_RANK}aaa`];
+
+  const gap = Math.floor(REINDEX_TOTAL / (count + 1));
+  return Array.from({ length: count }, (_, idx) =>
+    encodeBase26_4((idx + 1) * gap),
+  );
 };

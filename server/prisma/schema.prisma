@@ -94,7 +94,7 @@ model Ticket {
   description Json?
   priority    TicketPriority @default(MEDIUM)
   assigneeId  String?
-  position    Int
+  position    String
   storyPoints Int?
   createdById String?
   createdAt   DateTime       @default(now())

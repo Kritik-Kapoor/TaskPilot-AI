@@ -11,9 +11,9 @@ import {
 } from "./project.service.js";
 import { normalizeStoredTicketDescription } from "../utils/ticketDescription.utils.js";
 import {
-  getAppendPosition,
-  getPositionBetween,
-  TICKET_POSITION_GAP,
+  getAppendLexoRank,
+  getLexoRankBetween,
+  generateReindexPositions,
 } from "../utils/ticketPosition.utils.js";
 import { BACKLOG_COLUMN_NAME } from "../constants/boardColumns.js";
 import { ensureDefaultWorkflowColumns } from "./boardColumn.service.js";
@@ -167,13 +167,14 @@ const generateTicketKey = async (projectId: string, projectKey: string) => {
 const getColumnMaxPosition = async (
   columnId: string,
   tx: TransactionClient = prisma,
-) => {
-  const result = await tx.ticket.aggregate({
+): Promise<string | null> => {
+  const result = await tx.ticket.findFirst({
     where: { columnId },
-    _max: { position: true },
+    orderBy: { position: "desc" },
+    select: { position: true },
   });
 
-  return result._max.position;
+  return result?.position ?? null;
 };
 
 const reindexColumnTickets = async (
@@ -186,11 +187,13 @@ const reindexColumnTickets = async (
     select: { id: true },
   });
 
+  const positions = generateReindexPositions(tickets.length);
+
   await Promise.all(
     tickets.map((ticket, index) =>
       tx.ticket.update({
         where: { id: ticket.id },
-        data: { position: (index + 1) * TICKET_POSITION_GAP },
+        data: { position: positions[index] },
       }),
     ),
   );
@@ -198,7 +201,7 @@ const reindexColumnTickets = async (
 
 const resolveInsertPosition = async (
   columnId: string,
-  explicitPosition: number | undefined,
+  explicitPosition: string | undefined,
   tx: TransactionClient,
 ) => {
   if (explicitPosition !== undefined) {
@@ -206,12 +209,12 @@ const resolveInsertPosition = async (
   }
 
   const maxPosition = await getColumnMaxPosition(columnId, tx);
-  return getAppendPosition(maxPosition);
+  return getAppendLexoRank(maxPosition);
 };
 
 export const normalizeColumnPositionsIfNeeded = async (
   columnId: string,
-  position: number,
+  position: string,
   tx: TransactionClient = prisma,
 ) => {
   const neighbours = await tx.ticket.findMany({
@@ -225,7 +228,7 @@ export const normalizeColumnPositionsIfNeeded = async (
     .reverse()
     .find((ticket) => ticket.position < position);
 
-  const newPosition = getPositionBetween(
+  const newPosition = getLexoRankBetween(
     prev?.position ?? null,
     next?.position ?? null,
   );
@@ -235,7 +238,7 @@ export const normalizeColumnPositionsIfNeeded = async (
   await reindexColumnTickets(columnId, tx);
 
   const refreshedMax = await getColumnMaxPosition(columnId, tx);
-  return getAppendPosition(refreshedMax);
+  return getAppendLexoRank(refreshedMax);
 };
 
 export const createTicket = async (
@@ -558,7 +561,7 @@ export const updateTicket = async (
 
     if (isMovingColumn && input.position === undefined) {
       const maxPosition = await getColumnMaxPosition(targetColumnId, tx);
-      position = getAppendPosition(maxPosition);
+      position = getAppendLexoRank(maxPosition);
     } else if (input.position !== undefined) {
       position = input.position;
 
@@ -607,7 +610,6 @@ export const updateTicket = async (
 };
 
 const buildReassignmentComment = (
-  actorName: string,
   targetName: string,
 ): Prisma.InputJsonValue => ({
   type: "doc",
@@ -617,7 +619,22 @@ const buildReassignmentComment = (
       content: [
         {
           type: "text",
-          text: `${actorName} re-assigned this ticket to ${targetName}.`,
+          text: `Re-assigned this ticket to ${targetName}.`,
+        },
+      ],
+    },
+  ],
+});
+
+const buildMoveColumnComment = (columnName: string): Prisma.InputJsonValue => ({
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: `Moved ticket to ${columnName} column.`,
         },
       ],
     },
@@ -699,18 +716,11 @@ export const assignOrReassignTickets = async (
 
   if (tickets.length === 0) return result;
 
-  const [actor, target] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: input.assigneeId },
-      select: { username: true },
-    }),
-  ]);
+  const target = await prisma.user.findUnique({
+    where: { id: input.assigneeId },
+    select: { username: true },
+  });
 
-  const actorName = actor?.username ?? "Someone";
   const targetName = target?.username ?? "another user";
 
   for (const ticket of tickets) {
@@ -762,7 +772,7 @@ export const assignOrReassignTickets = async (
         data: {
           ticketId: ticket.id,
           userId,
-          content: buildReassignmentComment(actorName, targetName),
+          content: buildReassignmentComment(targetName),
         },
       }),
     ]);
@@ -1073,6 +1083,8 @@ export const moveTicketsToColumn = async (
     });
   }
 
+  if (tickets.length === 0) return result;
+
   for (const ticket of tickets) {
     if (ticket.columnId === targetColumn.id) {
       result.skipped.push({
@@ -1084,13 +1096,21 @@ export const moveTicketsToColumn = async (
 
     await prisma.$transaction(async (tx) => {
       const maxPosition = await getColumnMaxPosition(targetColumn.id, tx);
-      const position = getAppendPosition(maxPosition);
+      const position = getAppendLexoRank(maxPosition);
 
       await tx.ticket.update({
         where: { id: ticket.id },
         data: {
           columnId: targetColumn.id,
           position,
+        },
+      });
+
+      await tx.comment.create({
+        data: {
+          ticketId: ticket.id,
+          userId,
+          content: buildMoveColumnComment(targetColumn.name),
         },
       });
     });

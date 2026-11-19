@@ -4,7 +4,7 @@ import type {
   RepositionTicketPayload,
   BoardFilters,
 } from "../../types";
-import { getPositionBetween } from "../../lib/utils/ticketPosition";
+import { getLexoRankBetween } from "../../lib/utils/ticketPosition";
 
 export type TicketsByColumn = Record<string, Ticket[]>;
 
@@ -32,12 +32,16 @@ export const computeRepositionPayload = (
     const prev = tickets[index - 1];
     const next = tickets[index + 1];
 
+    const position = getLexoRankBetween(
+      prev?.position ?? null,
+      next?.position ?? null,
+    );
+
+    // position is null only when the server-side reindex edge case is triggered;
+    // send the prev position as a hint so the server reindexes and resolves it.
     return {
       columnId,
-      position: getPositionBetween(
-        prev?.position ?? null,
-        next?.position ?? null,
-      ),
+      position: position ?? prev?.position ?? next?.position ?? "n",
     };
   }
 
@@ -63,7 +67,9 @@ export const buildBoardFilterSearchParams = (filters: BoardFilters) => {
 
   const query = filters.query.trim();
   if (query) params.set("query", query);
-  filters.assignee.forEach((assigneeId) => params.append("assignee", assigneeId));
+  filters.assignee.forEach((assigneeId) =>
+    params.append("assignee", assigneeId),
+  );
   if (filters.priority !== "all") params.set("priority", filters.priority);
   if (filters.type !== "all") params.set("type", filters.type);
   filters.labels.forEach((labelId) => params.append("labels", labelId));

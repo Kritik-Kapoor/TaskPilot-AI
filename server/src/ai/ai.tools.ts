@@ -62,10 +62,11 @@ export const aiTools: ChatCompletionTool[] = [
     function: {
       name: "navigate_workspace",
       description:
-        "Navigate the user to a main workspace page. Use when they ask to go to, open, or be taken to " +
-        "Backlog, Inbox, Assistant/AI chat, Members, Settings, or the Board (without ticket filters). " +
-        "Examples: 'take me to backlog', 'open members page', 'where is settings'. " +
-        "Do NOT use this to filter tickets — use filter_board when they want to find or show specific tickets.",
+        "Navigate the user to a main workspace page. Use only when they want to go there now — go to, open, " +
+        "take me to, show me the … page. " +
+        "Examples: 'take me to backlog', 'open members page'. " +
+        "Do NOT use for questions about the past (recap, nth/last task we did, 'did we open members'). " +
+        "Do NOT use to filter tickets — use filter_board when they want to find or show specific tickets.",
       parameters: {
         type: "object",
         properties: {

@@ -6,6 +6,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../config/db.js";
 import { findProjectInOrg, getProjectMembership } from "./project.service.js";
 import { ApiError } from "../utils/apiResponse.js";
+import { getAppendLexoRank } from "../utils/ticketPosition.utils.js";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -238,18 +239,25 @@ export const deleteProjectBoardColumn = async (
           select: { id: true },
         });
 
-        let position = await tx.ticket
-          .aggregate({
-            where: { columnId: target.id },
-            _max: { position: true },
-          })
-          .then((result) => result._max.position ?? 0);
+        const maxResult = await tx.ticket.findFirst({
+          where: { columnId: target.id },
+          orderBy: { position: "desc" },
+          select: { position: true },
+        });
+
+        let lastTicketPosInTargetCol: string | null =
+          maxResult?.position ?? null;
 
         for (const ticket of tickets) {
-          position += 1000;
+          lastTicketPosInTargetCol = getAppendLexoRank(
+            lastTicketPosInTargetCol,
+          );
           await tx.ticket.update({
             where: { id: ticket.id },
-            data: { columnId: target.id, position },
+            data: {
+              columnId: target.id,
+              position: lastTicketPosInTargetCol,
+            },
           });
         }
 
